@@ -177,7 +177,11 @@ export function AdCreativeForm({
       };
 
       if (!res.ok) {
-        throw new Error(data.error || "Request failed");
+        throw new Error(
+          typeof data.error === "string" && data.error.length > 0
+            ? data.error
+            : "Request failed",
+        );
       }
 
       const nameOk =
@@ -213,7 +217,8 @@ export function AdCreativeForm({
             Product reference
           </CardTitle>
           <CardDescription>
-            One clear packshot or lifestyle shot works best.
+            One clear packshot or lifestyle shot works best. Many image models
+            reject photos that may show a recognizable real person.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

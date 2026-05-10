@@ -10,6 +10,7 @@ import {
   GenerateAdCreativeError,
   generateAdCreative,
 } from "@/lib/ai/generate-ad-creative";
+import { mapProviderGenerationError } from "@/lib/ai/map-provider-generation-error";
 import { formatBrandingForPrompt } from "@/lib/branding/format-prompt";
 import { loadBrandingKitForGenerate } from "@/lib/branding/server-store";
 
@@ -197,6 +198,13 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: err.message, code: err.code },
         { status: 400 },
+      );
+    }
+    const mapped = mapProviderGenerationError(err);
+    if (mapped) {
+      return NextResponse.json(
+        { error: mapped.error, code: mapped.code },
+        { status: mapped.httpStatus },
       );
     }
     const message = err instanceof Error ? err.message : "Generation failed";

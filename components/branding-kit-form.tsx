@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
+  FileText,
   Globe,
   ImageIcon,
   Loader2,
@@ -26,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { BrandingTypographySlot } from "@/components/branding-typography-slot";
 import { importBrandingFromUrl } from "@/lib/branding/import-url/client";
+import { importBrandingFromPdf } from "@/lib/branding/import-pdf/client";
 import {
   DEFAULT_BRANDING_KIT_VIEW,
   type BrandingKit,
@@ -57,6 +59,8 @@ export function BrandingKitForm({
   const [importUrl, setImportUrl] = useState("");
   const [importLoading, setImportLoading] = useState(false);
   const [importWarnings, setImportWarnings] = useState<string[]>([]);
+  const [pdfImportLoading, setPdfImportLoading] = useState(false);
+  const [pdfImportWarnings, setPdfImportWarnings] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
   const pendingLogoPreviewUrl = useMemo(
@@ -163,6 +167,7 @@ export function BrandingKitForm({
 
   const runWebsiteImport = async () => {
     setImportWarnings([]);
+    setPdfImportWarnings([]);
     setImportLoading(true);
     try {
       const result = await importBrandingFromUrl(importUrl);
@@ -186,6 +191,46 @@ export function BrandingKitForm({
       );
     } finally {
       setImportLoading(false);
+    }
+  };
+
+  const runPdfImport = async (file: File) => {
+    setPdfImportWarnings([]);
+    setImportWarnings([]);
+    setPdfImportLoading(true);
+    try {
+      const result = await importBrandingFromPdf(file);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      setView(result.view);
+      setKit(result.view.kit);
+      setPendingLogoFile(null);
+      setPendingHeadingFontFile(null);
+      setPendingBodyFontFile(null);
+      setRemoveLogo(false);
+      setRemoveHeadingFont(false);
+      setRemoveBodyFont(false);
+      setPdfImportWarnings(result.warnings);
+      const noFields =
+        result.warnings.length > 0 &&
+        result.warnings.some((w) =>
+          w.includes("did not return any non-empty fields"),
+        );
+      if (noFields) {
+        toast.message(
+          "No branding fields were inferred from this PDF — your saved kit is unchanged.",
+        );
+      } else {
+        toast.success(
+          result.warnings.length > 0
+            ? "PDF import finished — review notes below."
+            : "Branding extracted from PDF and saved.",
+        );
+      }
+    } finally {
+      setPdfImportLoading(false);
     }
   };
 
@@ -254,6 +299,61 @@ export function BrandingKitForm({
                 <ul className="mt-1 list-inside list-disc">
                   {importWarnings.map((w, i) => (
                     <li key={`${i}-${w.slice(0, 48)}`}>{w}</li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <FileText className="size-5" aria-hidden />
+            Import from brand guide (PDF)
+          </CardTitle>
+          <CardDescription className="max-w-2xl text-sm leading-relaxed">
+            Upload a text-based PDF (exported from InDesign, Figma, Google Docs,
+            etc.). We extract plain text on the server, then use AI to fill name,
+            tagline, colors, typography hints, voice & tone, and layout notes.
+            Logos and custom fonts are not pulled from PDFs yet — add those below
+            or keep your existing uploads.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="brand-import-pdf">Brand guidelines PDF</Label>
+            <Input
+              id="brand-import-pdf"
+              type="file"
+              accept="application/pdf,.pdf"
+              className="cursor-pointer"
+              disabled={pdfImportLoading}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) void runPdfImport(f);
+              }}
+            />
+            <p className="text-muted-foreground text-xs">
+              Max 25 MB. Scanned pages need OCR first — image-only PDFs usually
+              produce little text.
+            </p>
+          </div>
+          {pdfImportLoading ? (
+            <p className="text-muted-foreground flex items-center gap-2 text-sm">
+              <Loader2 className="size-4 animate-spin" aria-hidden />
+              Parsing PDF and extracting branding…
+            </p>
+          ) : null}
+          {pdfImportWarnings.length > 0 ? (
+            <Alert variant="default">
+              <AlertTitle>PDF import notes</AlertTitle>
+              <AlertDescription>
+                <ul className="mt-1 list-inside list-disc">
+                  {pdfImportWarnings.map((w, i) => (
+                    <li key={`pdf-${i}-${w.slice(0, 48)}`}>{w}</li>
                   ))}
                 </ul>
               </AlertDescription>

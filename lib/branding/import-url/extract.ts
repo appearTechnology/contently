@@ -1,10 +1,9 @@
 import * as cheerio from "cheerio";
-import { GOOGLE_FONT_FAMILIES } from "@/lib/branding/google-fonts";
 import {
   emptyTypographySlot,
   type BrandingKit,
-  type TypographySlot,
 } from "@/lib/branding/types";
+import { typographySlotForFamily } from "@/lib/branding/typography-slot-for-family";
 import { safeFetchImage, safeFetchStylesheet } from "./safe-fetch";
 
 const MAX_STYLESHEETS = 5;
@@ -144,28 +143,6 @@ function familiesFromGoogleFontsHref(href: string): string[] {
   } catch {
     return [];
   }
-}
-
-function typographySlotForFamily(family: string): TypographySlot {
-  const name = family.trim();
-  if (!name) return emptyTypographySlot();
-  const match = GOOGLE_FONT_FAMILIES.find(
-    (f) => f.toLowerCase() === name.toLowerCase(),
-  );
-  if (match) {
-    return {
-      kind: "google",
-      manual: "",
-      googleFamily: match,
-      customFamily: "",
-    };
-  }
-  return {
-    kind: "manual",
-    manual: name,
-    googleFamily: "",
-    customFamily: "",
-  };
 }
 
 function parseAppleTouchSize(href: string, sizes: string | undefined): number {
