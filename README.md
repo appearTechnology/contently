@@ -16,6 +16,16 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## AI Gateway
+
+This app calls models through the [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) using `provider/model` strings in `lib/models/registry.ts`.
+
+1. Link the project: `vercel link`
+2. Enable AI Gateway for the project in the Vercel dashboard
+3. Pull environment variables: `vercel env pull .env.local` (provisions `VERCEL_OIDC_TOKEN` for local development; refresh when it expires)
+
+Alternatively set `AI_GATEWAY_API_KEY` in `.env.local` (see `.env.example`).
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
