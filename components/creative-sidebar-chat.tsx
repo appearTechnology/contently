@@ -18,6 +18,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -435,12 +436,11 @@ export function CreativeSidebarChat({
 
         {hasBrandKit ? (
           <div className="flex items-start gap-2 pt-1">
-            <input
+            <Checkbox
               id="sidebar-apply-branding"
-              type="checkbox"
               checked={applyBranding}
-              onChange={(e) => setApplyBranding(e.target.checked)}
-              className="border-sidebar-border text-sidebar-primary focus-visible:ring-sidebar-ring mt-0.5 size-3.5 shrink-0 rounded border shadow-xs focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+              onCheckedChange={(checked) => setApplyBranding(checked === true)}
+              className="border-sidebar-border text-sidebar-primary focus-visible:ring-sidebar-ring mt-0.5 size-3.5 shrink-0 rounded border shadow-xs focus-visible:ring-2 focus-visible:ring-offset-2 data-checked:border-sidebar-primary data-checked:bg-sidebar-primary data-checked:text-sidebar-primary-foreground"
             />
             <Label
               htmlFor="sidebar-apply-branding"
@@ -469,14 +469,16 @@ export function CreativeSidebarChat({
                   Main
                 </span>
               ) : null}
-              <button
+              <Button
                 type="button"
-                className="bg-background/80 absolute right-0.5 top-0.5 flex size-5 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100 hover:bg-background"
+                variant="ghost"
+                size="icon-xs"
+                className="bg-background/80 absolute right-0.5 top-0.5 size-5 rounded opacity-0 transition-opacity group-hover:opacity-100 hover:bg-background"
                 onClick={() => removeAttachment(a.id)}
                 aria-label="Remove image"
               >
                 <XIcon className="size-3" />
-              </button>
+              </Button>
             </div>
           ))}
           {attachments.length < MAX_ATTACHMENTS ? (

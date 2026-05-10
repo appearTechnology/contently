@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
-import { SignIn } from "@clerk/nextjs";
 import { redirect } from "next/navigation";
+import { ClerkSignInPanel } from "@/components/clerk-sign-in-panel";
 
 export default async function SignInPage() {
   const { userId } = await auth();
@@ -8,11 +8,5 @@ export default async function SignInPage() {
     redirect("/");
   }
 
-  return (
-    <SignIn
-      signUpUrl="/sign-up"
-      forceRedirectUrl="/"
-      fallbackRedirectUrl="/"
-    />
-  );
+  return <ClerkSignInPanel />;
 }

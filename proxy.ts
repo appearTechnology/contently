@@ -1,5 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { shouldAllowOnboardingWithoutSession } from "@/lib/auth/onboarding-local-bypass";
 
 const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
@@ -10,6 +11,13 @@ const isApiRoute = createRouteMatcher(["/api(.*)"]);
 
 export default clerkMiddleware(async (auth, request) => {
   if (isPublicRoute(request) || isApiRoute(request)) {
+    return NextResponse.next();
+  }
+
+  if (
+    request.nextUrl.pathname.startsWith("/onboarding") &&
+    shouldAllowOnboardingWithoutSession(request.nextUrl.hostname)
+  ) {
     return NextResponse.next();
   }
 

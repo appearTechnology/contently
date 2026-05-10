@@ -26,9 +26,18 @@ This app calls models through the [Vercel AI Gateway](https://vercel.com/docs/ai
 
 Alternatively set `AI_GATEWAY_API_KEY` in `.env.local` (see `.env.example`).
 
+## Clerk: `POST /client/sign_ups` returns 422
+
+That response is from **Clerk’s Frontend API** (validation or instance policy), not from this repo’s API routes.
+
+1. **See the real reason:** DevTools → **Network** → filter `sign_ups` → open the failed **POST** → **Response** / **Preview** → copy the JSON (`errors`, `long_message`, etc.).
+2. **Typical fixes:** password policy, duplicate email, blocked/disposable email (Dashboard → **Restrictions**), or **Attack Protection** / bot challenge failing in dev (relax or fix ad blockers; check Clerk logs).
+3. **Env:** `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` must be from the **same** Clerk app. Paths in `.env.example` must match your routes (`/sign-in`, `/sign-up`).
+4. **App Router catch-all:** `<SignUp />` / `<SignIn />` are mounted with `path` + `routing="path"` in [`components/clerk-sign-up-panel.tsx`](components/clerk-sign-up-panel.tsx) and [`components/clerk-sign-in-panel.tsx`](components/clerk-sign-in-panel.tsx) so Clerk’s client matches `[[...sign-up]]` / `[[...sign-in]]`.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to load [Figtree](https://fonts.google.com/specimen/Figtree) for UI, headings, and monospace-styled text.
 
 ## Learn More
 

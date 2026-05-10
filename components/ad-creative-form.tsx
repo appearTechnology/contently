@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
   CardContent,
@@ -329,12 +330,11 @@ export function AdCreativeForm({
               <p className="text-muted-foreground text-sm">{brandingPreview(brandingMeta)}</p>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex gap-3">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     id="apply-branding"
                     checked={applyBranding}
-                    onChange={(e) => setApplyBranding(e.target.checked)}
-                    className="border-input text-primary focus-visible:ring-ring mt-1 size-4 shrink-0 rounded border shadow-xs focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                    onCheckedChange={(checked) => setApplyBranding(checked === true)}
+                    className="mt-1"
                   />
                   <div className="space-y-1">
                     <Label htmlFor="apply-branding" className="cursor-pointer font-normal">
