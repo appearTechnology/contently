@@ -26,9 +26,8 @@ export type DeterministicExtraction = Pick<
   | "bodyTypography"
 > & {
   /**
-   * Optional logo bytes pulled from the page's icon / og:image. Caller is
-   * responsible for uploading these to Supabase Storage; the kit row itself
-   * does not carry binary data.
+   * Optional logo bytes from page metadata (icons, JSON-LD, then og:image only
+   * as a weak fallback). Caller uploads to storage; the kit row has no binary.
    */
   logoBytes: Buffer | null;
   logoMediaType: string | null;
@@ -176,6 +175,68 @@ function parseAppleTouchSize(href: string, sizes: string | undefined): number {
   return Number(m[1]) || 0;
 }
 
+/** Pull Organization / Brand `logo` URLs from JSON-LD blocks (often the real mark). */
+function collectLogoUrlsFromJsonLd(value: unknown, out: Set<string>): void {
+  if (value === null || value === undefined) return;
+  if (typeof value === "string") {
+    const t = value.trim();
+    if (
+      t &&
+      (t.startsWith("http://") ||
+        t.startsWith("https://") ||
+        t.startsWith("//"))
+    ) {
+      out.add(t.startsWith("//") ? `https:${t}` : t);
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectLogoUrlsFromJsonLd(item, out);
+    return;
+  }
+  if (typeof value !== "object") return;
+  const o = value as Record<string, unknown>;
+  const types = o["@type"];
+  const typeStr = Array.isArray(types)
+    ? types.map(String).join(" ")
+    : typeof types === "string"
+      ? types
+      : "";
+  const isOrgLike =
+    /\b(Organization|Corporation|Brand|LocalBusiness|OnlineStore|MedicalOrganization|EducationalOrganization)\b/i.test(
+      typeStr,
+    );
+  if (isOrgLike && "logo" in o) {
+    const logo = o["logo"];
+    if (typeof logo === "string") {
+      collectLogoUrlsFromJsonLd(logo, out);
+    } else if (logo && typeof logo === "object") {
+      const lo = logo as Record<string, unknown>;
+      if (typeof lo.url === "string") collectLogoUrlsFromJsonLd(lo.url, out);
+      if (typeof lo["@id"] === "string") collectLogoUrlsFromJsonLd(lo["@id"], out);
+    }
+  }
+  for (const k of Object.keys(o)) {
+    if (k === "logo" && !isOrgLike) continue;
+    collectLogoUrlsFromJsonLd(o[k], out);
+  }
+}
+
+function extractJsonLdLogoHrefs($: cheerio.CheerioAPI): string[] {
+  const urls = new Set<string>();
+  $('script[type="application/ld+json"]').each((_, el) => {
+    const raw = $(el).contents().text().trim();
+    if (!raw) return;
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      collectLogoUrlsFromJsonLd(parsed, urls);
+    } catch {
+      /* ignore invalid JSON-LD */
+    }
+  });
+  return [...urls];
+}
+
 async function tryFetchLogo(
   pageUrl: URL,
   href: string,
@@ -262,37 +323,61 @@ export async function extractDeterministic(
       ? typographySlotForFamily(uniqueFonts[0]!)
       : emptyTypographySlot();
 
-  const logoCandidates: { href: string; priority: number }[] = [];
+  const logoCandidates: { href: string; priority: number; source: string }[] =
+    [];
 
-  $('link[rel="apple-touch-icon"][href]').each((_, el) => {
+  // Largest apple-touch icons first — almost always a real app/site mark.
+  $(
+    'link[rel="apple-touch-icon"][href], link[rel="apple-touch-icon-precomposed"][href]',
+  ).each((_, el) => {
     const href = $(el).attr("href");
     if (!href) return;
     const sizes = $(el).attr("sizes");
     const px = parseAppleTouchSize(href, sizes);
-    logoCandidates.push({ href, priority: 100 + px });
+    logoCandidates.push({ href, priority: 300 + px, source: "apple-touch" });
   });
 
-  const ogImage = $('meta[property="og:image"]').attr("content");
-  if (ogImage?.trim()) {
-    logoCandidates.push({ href: ogImage.trim(), priority: 50 });
+  // Structured data logos beat generic favicons and beat og:image (often a hero).
+  for (const href of extractJsonLdLogoHrefs($)) {
+    logoCandidates.push({ href, priority: 220, source: "json-ld" });
   }
 
   $('link[rel="icon"][href], link[rel="shortcut icon"][href]').each((_, el) => {
     const href = $(el).attr("href");
     if (!href) return;
-    logoCandidates.push({ href, priority: 10 });
+    const type = ($(el).attr("type") ?? "").toLowerCase();
+    const hrefLower = href.toLowerCase();
+    const looksRaster =
+      /\.(png|jpe?g|webp)(\?|$)/i.test(hrefLower) ||
+      type === "image/png" ||
+      type === "image/jpeg" ||
+      type === "image/webp";
+    // Prefer raster favicons; SVG is common but often rejected downstream — still try after PNGs.
+    const bonus = looksRaster ? 12 : 0;
+    logoCandidates.push({ href, priority: 180 + bonus, source: "favicon" });
   });
+
+  const ogImage = $('meta[property="og:image"]').attr("content");
+  if (ogImage?.trim()) {
+    logoCandidates.push({
+      href: ogImage.trim(),
+      priority: 40,
+      source: "og:image",
+    });
+  }
 
   logoCandidates.sort((a, b) => b.priority - a.priority);
 
   let logoBytes: Buffer | null = null;
   let logoMediaType: string | null = null;
-  for (const { href } of logoCandidates) {
+  let logoSource: string | null = null;
+  for (const { href, source } of logoCandidates) {
     try {
       const found = await tryFetchLogo(pageUrl, href, warnings);
       if (found) {
         logoBytes = found.buffer;
         logoMediaType = found.mediaType;
+        logoSource = source;
         break;
       }
     } catch {
@@ -300,8 +385,16 @@ export async function extractDeterministic(
     }
   }
 
+  if (logoSource === "og:image") {
+    warnings.push(
+      "Logo was taken from og:image (social preview), which is often not the real logo — upload the correct file if this looks wrong.",
+    );
+  }
+
   if (!logoBytes && logoCandidates.length > 0) {
-    warnings.push("Could not load a logo image from the page icons or og:image.");
+    warnings.push(
+      "Could not load a logo from icons, structured data, or og:image.",
+    );
   }
 
   $("script, style, noscript").remove();
