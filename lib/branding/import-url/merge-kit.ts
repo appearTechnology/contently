@@ -20,5 +20,6 @@ export function mergeImportedBranding(
     voiceTone: (l.voiceTone ?? "").trim().slice(0, 2000),
     voiceToneTags: normalizeVoiceToneTags(l.voiceToneTags),
     extraNotes: (l.extraNotes ?? "").trim().slice(0, 4000),
+    extraPaletteColors: [],
   };
 }

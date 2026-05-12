@@ -29,30 +29,49 @@ function buildPromptBlock(params: {
   taskInstruction: string;
   prompt: string;
   brandContext?: string;
-  includeBrandLogo: boolean;
-  extraReferenceCount: number;
+  /** Number of official brand reference images after the product (primary lockup, optional secondary lockup, optional icon). */
+  brandReferenceImageCount: number;
+  /** Mood/layout reference images supplied by the user (after brand marks in multimodal order). */
+  userReferenceCount: number;
 }): string {
   const {
     taskInstruction,
     prompt,
     brandContext,
-    includeBrandLogo,
-    extraReferenceCount,
+    brandReferenceImageCount,
+    userReferenceCount,
   } = params;
   let block = `${taskInstruction}\n\nCreative direction:\n${prompt}`;
   const brand = brandContext?.trim();
   if (brand) {
     block += `\n\nBrand guidelines:\n${brand}`;
   }
-  if (includeBrandLogo) {
-    block += brand
-      ? `\n\nAn additional reference image after the product photo shows the brand logo or lockup. Match geometry, placement, and clear space faithfully when using it.`
-      : `\n\nBrand guidelines:\nAn additional reference image after the product photo shows the brand logo or lockup. Match geometry, placement, and clear space faithfully when using it.`;
+  if (brandReferenceImageCount > 0) {
+    const intro = brand
+      ? `\n\nAfter the product image, ${brandReferenceImageCount} official brand reference image(s) follow in order`
+      : `\n\nBrand guidelines:\nAfter the product image, ${brandReferenceImageCount} official brand reference image(s) follow in order`;
+    block += `${intro} (primary lockup when present, then optional secondary lockup and/or square icon mark). Match geometry, placement, clear space, and typography faithfully when using them.`;
   }
-  if (extraReferenceCount > 0) {
-    block += `\n\nAfter the product image${includeBrandLogo ? " and logo reference" : ""}, ${extraReferenceCount} supplementary reference image(s) follow for mood, layout, or visual cues — incorporate them only as helpful guidance alongside the main product shot.`;
+  if (userReferenceCount > 0) {
+    if (brandReferenceImageCount > 0) {
+      block += `\n\nAfter those brand images, ${userReferenceCount} supplementary reference image(s) follow for mood, layout, or visual cues — incorporate them only as helpful guidance alongside the main product shot.`;
+    } else {
+      block += `\n\nAfter the product image, ${userReferenceCount} supplementary reference image(s) follow for mood, layout, or visual cues — incorporate them only as helpful guidance alongside the main product shot.`;
+    }
   }
   return block;
+}
+
+function isRasterBrandImage(
+  buffer: Buffer | undefined,
+  mediaType: string | undefined,
+): boolean {
+  return Boolean(
+    buffer &&
+      buffer.length > 0 &&
+      mediaType &&
+      mediaType.startsWith("image/"),
+  );
 }
 
 export async function generateAdCreative(params: {
@@ -61,11 +80,18 @@ export async function generateAdCreative(params: {
   prompt: string;
   imageBuffer: Buffer;
   imageMediaType: string;
-  /** Extra reference images (not product, not logo). Order: after product (+ logo in multimodal); generate-image order is product, extras, logo last. */
+  /** Mood/layout references from the user (after brand marks in multimodal order). */
   referenceBuffers?: { buffer: Buffer; mediaType: string }[];
   brandContext?: string;
+  /** Primary lockup (first brand image after the product when present). */
   brandLogoBuffer?: Buffer;
   brandLogoMediaType?: string;
+  /** Alternate horizontal / secondary lockup. */
+  brandSecondaryLogoBuffer?: Buffer;
+  brandSecondaryLogoMediaType?: string;
+  /** Square or icon mark. */
+  brandIconBuffer?: Buffer;
+  brandIconMediaType?: string;
 }): Promise<CreativeResult> {
   const {
     model,
@@ -77,14 +103,20 @@ export async function generateAdCreative(params: {
     brandContext,
     brandLogoBuffer,
     brandLogoMediaType,
+    brandSecondaryLogoBuffer,
+    brandSecondaryLogoMediaType,
+    brandIconBuffer,
+    brandIconMediaType,
   } = params;
 
-  const includeBrandLogo = Boolean(
-    brandLogoBuffer &&
-      brandLogoBuffer.length > 0 &&
-      brandLogoMediaType &&
-      brandLogoMediaType.startsWith("image/"),
+  const hasPrimaryBrand = isRasterBrandImage(brandLogoBuffer, brandLogoMediaType);
+  const hasSecondaryBrand = isRasterBrandImage(
+    brandSecondaryLogoBuffer,
+    brandSecondaryLogoMediaType,
   );
+  const hasIconBrand = isRasterBrandImage(brandIconBuffer, brandIconMediaType);
+  const brandReferenceImageCount =
+    (hasPrimaryBrand ? 1 : 0) + (hasSecondaryBrand ? 1 : 0) + (hasIconBrand ? 1 : 0);
 
   if (format === "video") {
     if (!model.capabilities.includes("video")) {
@@ -95,8 +127,8 @@ export async function generateAdCreative(params: {
       taskInstruction: VIDEO_AD_INSTRUCTION,
       prompt,
       brandContext,
-      includeBrandLogo,
-      extraReferenceCount: referenceBuffers.length,
+      brandReferenceImageCount: hasPrimaryBrand ? 1 : 0,
+      userReferenceCount: referenceBuffers.length,
     });
 
     const videoResult = await experimental_generateVideo({
@@ -124,8 +156,8 @@ export async function generateAdCreative(params: {
     taskInstruction: AD_INSTRUCTION,
     prompt,
     brandContext,
-    includeBrandLogo,
-    extraReferenceCount: referenceBuffers.length,
+    brandReferenceImageCount,
+    userReferenceCount: referenceBuffers.length,
   });
 
   if (!model.capabilities.includes("image")) {
@@ -134,6 +166,20 @@ export async function generateAdCreative(params: {
 
   const strategy = model.imageStrategy ?? "multimodal-generate-text";
 
+  const brandImages: { buffer: Buffer; mediaType: string }[] = [];
+  if (hasPrimaryBrand && brandLogoBuffer && brandLogoMediaType) {
+    brandImages.push({ buffer: brandLogoBuffer, mediaType: brandLogoMediaType });
+  }
+  if (hasSecondaryBrand && brandSecondaryLogoBuffer && brandSecondaryLogoMediaType) {
+    brandImages.push({
+      buffer: brandSecondaryLogoBuffer,
+      mediaType: brandSecondaryLogoMediaType,
+    });
+  }
+  if (hasIconBrand && brandIconBuffer && brandIconMediaType) {
+    brandImages.push({ buffer: brandIconBuffer, mediaType: brandIconMediaType });
+  }
+
   const userContent: Array<
     | { type: "text"; text: string }
     | { type: "image"; image: Buffer; mediaType: string }
@@ -141,11 +187,11 @@ export async function generateAdCreative(params: {
     { type: "text", text: promptBlock },
     { type: "image", image: imageBuffer, mediaType: imageMediaType },
   ];
-  if (includeBrandLogo && brandLogoBuffer && brandLogoMediaType) {
+  for (const b of brandImages) {
     userContent.push({
       type: "image",
-      image: brandLogoBuffer,
-      mediaType: brandLogoMediaType,
+      image: b.buffer,
+      mediaType: b.mediaType,
     });
   }
   for (const ref of referenceBuffers) {
@@ -186,8 +232,8 @@ export async function generateAdCreative(params: {
   for (const ref of referenceBuffers) {
     refImages.push(ref.buffer);
   }
-  if (includeBrandLogo && brandLogoBuffer) {
-    refImages.push(brandLogoBuffer);
+  for (const b of brandImages) {
+    refImages.push(b.buffer);
   }
 
   const result = await generateImage({

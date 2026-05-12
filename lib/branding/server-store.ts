@@ -1,7 +1,9 @@
 import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   brandingAssetsBucket,
-  createSupabaseAdminClient,
+  supabaseDashboardApiSettingsUrl,
+  tryCreateSupabaseAdminClient,
 } from "@/lib/supabase/admin";
 import {
   DEFAULT_BRANDING_KIT,
@@ -18,6 +20,7 @@ import {
   imageExtensionFromMediaType,
 } from "@/lib/branding/data-url";
 import { ALLOWED_LOGO_MEDIA_TYPES } from "@/lib/branding/logo-media";
+import { normalizeExtraPaletteColors } from "@/lib/branding/extra-palette-colors";
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 const ALLOWED_FONT_TYPES = new Set([
@@ -42,6 +45,7 @@ type BrandingRow = {
   primary_color: string | null;
   secondary_color: string | null;
   accent_color: string | null;
+  palette_extras: unknown;
   voice_tone: string | null;
   voice_tone_tags: unknown;
   extra_notes: string | null;
@@ -49,6 +53,10 @@ type BrandingRow = {
   body_typography: unknown;
   logo_path: string | null;
   logo_media_type: string | null;
+  secondary_logo_path: string | null;
+  secondary_logo_media_type: string | null;
+  icon_path: string | null;
+  icon_media_type: string | null;
   heading_font_path: string | null;
   heading_font_media_type: string | null;
   body_font_path: string | null;
@@ -80,6 +88,7 @@ function rowToKit(row: BrandingRow): BrandingKit {
     primaryColor: row.primary_color ?? "",
     secondaryColor: row.secondary_color ?? "",
     accentColor: row.accent_color ?? "",
+    extraPaletteColors: normalizeExtraPaletteColors(row.palette_extras),
     headingTypography: parseTypography(row.heading_typography),
     bodyTypography: parseTypography(row.body_typography),
     voiceTone: row.voice_tone ?? "",
@@ -89,11 +98,11 @@ function rowToKit(row: BrandingRow): BrandingKit {
 }
 
 async function signPath(
+  supabase: SupabaseClient,
   path: string | null,
   bucket: string,
 ): Promise<string | null> {
   if (!path) return null;
-  const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase.storage
     .from(bucket)
     .createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
@@ -109,7 +118,15 @@ export async function getBrandingKitView(
   userId: string,
 ): Promise<BrandingKitView> {
   if (!userId) return DEFAULT_BRANDING_KIT_VIEW;
-  const supabase = createSupabaseAdminClient();
+  const supabase = tryCreateSupabaseAdminClient();
+  if (!supabase) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn(
+        "[branding] Supabase admin key missing — returning empty kit. Set SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY in .env.local.",
+      );
+    }
+    return DEFAULT_BRANDING_KIT_VIEW;
+  }
   const { data, error } = await supabase
     .from("branding_kits")
     .select("*")
@@ -119,16 +136,23 @@ export async function getBrandingKitView(
   if (error || !data) return DEFAULT_BRANDING_KIT_VIEW;
 
   const bucket = brandingAssetsBucket();
-  const [logoUrl, headingFontUrl, bodyFontUrl] = await Promise.all([
-    signPath(data.logo_path, bucket),
-    signPath(data.heading_font_path, bucket),
-    signPath(data.body_font_path, bucket),
-  ]);
+  const [logoUrl, secondaryLogoUrl, iconUrl, headingFontUrl, bodyFontUrl] =
+    await Promise.all([
+      signPath(supabase, data.logo_path, bucket),
+      signPath(supabase, data.secondary_logo_path, bucket),
+      signPath(supabase, data.icon_path, bucket),
+      signPath(supabase, data.heading_font_path, bucket),
+      signPath(supabase, data.body_font_path, bucket),
+    ]);
 
   return {
     kit: rowToKit(data),
     logoUrl,
     logoMediaType: data.logo_media_type,
+    secondaryLogoUrl,
+    secondaryLogoMediaType: data.secondary_logo_media_type,
+    iconUrl,
+    iconMediaType: data.icon_media_type,
     headingFontUrl,
     headingFontMediaType: data.heading_font_media_type,
     bodyFontUrl,
@@ -140,16 +164,25 @@ export type BrandingAssetUpload = {
   bytes: Buffer;
   mediaType: string;
   /** filename only, no folder. Folder is always `<userId>/`. */
-  filenameStem: "logo" | "heading-font" | "body-font";
+  filenameStem:
+    | "logo"
+    | "secondary-logo"
+    | "icon"
+    | "heading-font"
+    | "body-font";
 };
 
 export type UpsertBrandingInput = {
   userId: string;
   kit: BrandingKit;
   logo?: BrandingAssetUpload | null;
+  secondaryLogo?: BrandingAssetUpload | null;
+  icon?: BrandingAssetUpload | null;
   headingFont?: BrandingAssetUpload | null;
   bodyFont?: BrandingAssetUpload | null;
   removeLogo?: boolean;
+  removeSecondaryLogo?: boolean;
+  removeIcon?: boolean;
   removeHeadingFont?: boolean;
   removeBodyFont?: boolean;
 };
@@ -200,11 +233,22 @@ function ensureAllowedAsset(
   return true;
 }
 
+const POSTGREST_SCHEMA_HINT =
+  "In the Supabase project used by this app: SQL Editor → paste and run the full script from supabase/repair-branding-kits.sql (adds columns + reloads the API schema). Then save again.";
+
+function supabaseAdminHint(): string {
+  const base =
+    "Set SUPABASE_SERVICE_ROLE_KEY (service_role JWT) or SUPABASE_SECRET_KEY (sb_secret_…) in .env.local from the same project as NEXT_PUBLIC_SUPABASE_URL.";
+  const dash = supabaseDashboardApiSettingsUrl();
+  return dash ? `${base} Copy from: ${dash}` : `${base} Supabase → Dashboard → Settings → API.`;
+}
+
 export class BrandingStoreError extends Error {
   constructor(
     message: string,
     readonly code: string,
     readonly status: number,
+    readonly hint?: string,
   ) {
     super(message);
     this.name = "BrandingStoreError";
@@ -218,18 +262,24 @@ function pathFor(
   if (asset.filenameStem === "logo") {
     return `${userId}/logo.${imageExtensionFromMediaType(asset.mediaType)}`;
   }
+  if (asset.filenameStem === "secondary-logo") {
+    return `${userId}/secondary-logo.${imageExtensionFromMediaType(asset.mediaType)}`;
+  }
+  if (asset.filenameStem === "icon") {
+    return `${userId}/icon.${imageExtensionFromMediaType(asset.mediaType)}`;
+  }
   return `${userId}/${asset.filenameStem}.${fontExtensionFromMediaType(
     asset.mediaType,
   )}`;
 }
 
 async function uploadAsset(
+  supabase: SupabaseClient,
   bucket: string,
   userId: string,
   asset: BrandingAssetUpload,
   existingPath: string | null,
 ): Promise<{ path: string; mediaType: string }> {
-  const supabase = createSupabaseAdminClient();
   const newPath = pathFor(userId, asset);
 
   const { error: uploadErr } = await supabase.storage
@@ -243,7 +293,7 @@ async function uploadAsset(
     throw new BrandingStoreError(
       `Could not upload ${asset.filenameStem}: ${uploadErr.message}`,
       "UPLOAD_FAILED",
-      502,
+      500,
     );
   }
 
@@ -255,12 +305,34 @@ async function uploadAsset(
 }
 
 async function removeAssetIfPresent(
+  supabase: SupabaseClient,
   bucket: string,
   path: string | null,
 ): Promise<void> {
   if (!path) return;
-  const supabase = createSupabaseAdminClient();
   await supabase.storage.from(bucket).remove([path]);
+}
+
+function columnFromPostgrestSchemaError(message: string): string | null {
+  const m = message.match(/Could not find the '([^']+)' column/);
+  return m?.[1] ?? null;
+}
+
+function stripIconRowKeys(row: Record<string, unknown>): void {
+  delete row.icon_path;
+  delete row.icon_media_type;
+}
+
+function stripSecondaryRowKeys(row: Record<string, unknown>): void {
+  delete row.secondary_logo_path;
+  delete row.secondary_logo_media_type;
+}
+
+function isPostgrestSchemaColumnOrCacheError(message: string): boolean {
+  return (
+    /schema cache/i.test(message) ||
+    /Could not find the '[^']+' column/i.test(message)
+  );
 }
 
 /**
@@ -275,9 +347,13 @@ export async function upsertBrandingKit(
     userId,
     kit,
     logo,
+    secondaryLogo,
+    icon,
     headingFont,
     bodyFont,
     removeLogo,
+    removeSecondaryLogo,
+    removeIcon,
     removeHeadingFont,
     removeBodyFont,
   } = input;
@@ -285,54 +361,84 @@ export async function upsertBrandingKit(
     throw new BrandingStoreError("Missing user id", "UNAUTHENTICATED", 401);
   }
 
-  const supabase = createSupabaseAdminClient();
+  const supabase = tryCreateSupabaseAdminClient();
+  if (!supabase) {
+    throw new BrandingStoreError(
+      "Supabase server credentials are not configured.",
+      "ADMIN_NOT_CONFIGURED",
+      503,
+      supabaseAdminHint(),
+    );
+  }
   const bucket = brandingAssetsBucket();
 
   const { data: existing } = await supabase
     .from("branding_kits")
-    .select(
-      "logo_path, logo_media_type, heading_font_path, heading_font_media_type, body_font_path, body_font_media_type",
-    )
+    .select("*")
     .eq("user_id", userId)
-    .maybeSingle<{
-      logo_path: string | null;
-      logo_media_type: string | null;
-      heading_font_path: string | null;
-      heading_font_media_type: string | null;
-      body_font_path: string | null;
-      body_font_media_type: string | null;
-    }>();
+    .maybeSingle<BrandingRow>();
 
   let logoPath = existing?.logo_path ?? null;
   let logoMediaType = existing?.logo_media_type ?? null;
+  let secondaryLogoPath = existing?.secondary_logo_path ?? null;
+  let secondaryLogoMediaType = existing?.secondary_logo_media_type ?? null;
+  let iconPath = existing?.icon_path ?? null;
+  let iconMediaType = existing?.icon_media_type ?? null;
   let headingFontPath = existing?.heading_font_path ?? null;
   let headingFontMediaType = existing?.heading_font_media_type ?? null;
   let bodyFontPath = existing?.body_font_path ?? null;
   let bodyFontMediaType = existing?.body_font_media_type ?? null;
 
   if (removeLogo) {
-    await removeAssetIfPresent(bucket, logoPath);
+    await removeAssetIfPresent(supabase, bucket, logoPath);
     logoPath = null;
     logoMediaType = null;
   }
+  if (removeSecondaryLogo) {
+    await removeAssetIfPresent(supabase, bucket, secondaryLogoPath);
+    secondaryLogoPath = null;
+    secondaryLogoMediaType = null;
+  }
+  if (removeIcon) {
+    await removeAssetIfPresent(supabase, bucket, iconPath);
+    iconPath = null;
+    iconMediaType = null;
+  }
   if (removeHeadingFont) {
-    await removeAssetIfPresent(bucket, headingFontPath);
+    await removeAssetIfPresent(supabase, bucket, headingFontPath);
     headingFontPath = null;
     headingFontMediaType = null;
   }
   if (removeBodyFont) {
-    await removeAssetIfPresent(bucket, bodyFontPath);
+    await removeAssetIfPresent(supabase, bucket, bodyFontPath);
     bodyFontPath = null;
     bodyFontMediaType = null;
   }
 
   if (ensureAllowedAsset(logo ?? null, "logo")) {
-    const uploaded = await uploadAsset(bucket, userId, logo!, logoPath);
+    const uploaded = await uploadAsset(supabase, bucket, userId, logo!, logoPath);
     logoPath = uploaded.path;
     logoMediaType = uploaded.mediaType;
   }
+  if (ensureAllowedAsset(secondaryLogo ?? null, "logo")) {
+    const uploaded = await uploadAsset(
+      supabase,
+      bucket,
+      userId,
+      secondaryLogo!,
+      secondaryLogoPath,
+    );
+    secondaryLogoPath = uploaded.path;
+    secondaryLogoMediaType = uploaded.mediaType;
+  }
+  if (ensureAllowedAsset(icon ?? null, "logo")) {
+    const uploaded = await uploadAsset(supabase, bucket, userId, icon!, iconPath);
+    iconPath = uploaded.path;
+    iconMediaType = uploaded.mediaType;
+  }
   if (ensureAllowedAsset(headingFont ?? null, "font")) {
     const uploaded = await uploadAsset(
+      supabase,
       bucket,
       userId,
       headingFont!,
@@ -342,40 +448,150 @@ export async function upsertBrandingKit(
     headingFontMediaType = uploaded.mediaType;
   }
   if (ensureAllowedAsset(bodyFont ?? null, "font")) {
-    const uploaded = await uploadAsset(bucket, userId, bodyFont!, bodyFontPath);
+    const uploaded = await uploadAsset(
+      supabase,
+      bucket,
+      userId,
+      bodyFont!,
+      bodyFontPath,
+    );
     bodyFontPath = uploaded.path;
     bodyFontMediaType = uploaded.mediaType;
   }
 
-  const { error: rowErr } = await supabase.from("branding_kits").upsert(
-    {
-      user_id: userId,
-      version: 2,
-      brand_name: kit.brandName,
-      tagline: kit.tagline,
-      primary_color: kit.primaryColor,
-      secondary_color: kit.secondaryColor,
-      accent_color: kit.accentColor,
-      voice_tone: kit.voiceTone,
-      voice_tone_tags: normalizeVoiceToneTags(kit.voiceToneTags),
-      extra_notes: kit.extraNotes,
-      heading_typography: kit.headingTypography,
-      body_typography: kit.bodyTypography,
-      logo_path: logoPath,
-      logo_media_type: logoMediaType,
-      heading_font_path: headingFontPath,
-      heading_font_media_type: headingFontMediaType,
-      body_font_path: bodyFontPath,
-      body_font_media_type: bodyFontMediaType,
-    },
-    { onConflict: "user_id" },
-  );
+  const fullRow: Record<string, unknown> = {
+    user_id: userId,
+    version: 2,
+    brand_name: kit.brandName,
+    tagline: kit.tagline,
+    primary_color: kit.primaryColor,
+    secondary_color: kit.secondaryColor,
+    accent_color: kit.accentColor,
+    palette_extras: kit.extraPaletteColors,
+    voice_tone: kit.voiceTone,
+    voice_tone_tags: normalizeVoiceToneTags(kit.voiceToneTags),
+    extra_notes: kit.extraNotes,
+    heading_typography: kit.headingTypography,
+    body_typography: kit.bodyTypography,
+    logo_path: logoPath,
+    logo_media_type: logoMediaType,
+    secondary_logo_path: secondaryLogoPath,
+    secondary_logo_media_type: secondaryLogoMediaType,
+    icon_path: iconPath,
+    icon_media_type: iconMediaType,
+    heading_font_path: headingFontPath,
+    heading_font_media_type: headingFontMediaType,
+    body_font_path: bodyFontPath,
+    body_font_media_type: bodyFontMediaType,
+  };
+
+  let row: Record<string, unknown> = { ...fullRow };
+  let rowErr = (
+    await supabase.from("branding_kits").upsert(row, { onConflict: "user_id" })
+  ).error;
+
+  let droppedPaletteExtrasForRetry = false;
+  let droppedVoiceToneTagsForRetry = false;
+  let guard = 0;
+  const protectIconKeys = Boolean(icon) || removeIcon;
+  const protectSecondaryKeys = Boolean(secondaryLogo) || removeSecondaryLogo;
+
+  while (
+    rowErr &&
+    isPostgrestSchemaColumnOrCacheError(rowErr.message) &&
+    guard++ < 24
+  ) {
+    const msg = rowErr.message ?? "";
+    const col = columnFromPostgrestSchemaError(msg);
+
+    if (col) {
+      const isIcon =
+        col === "icon_path" || col === "icon_media_type";
+      const isSecondary =
+        col === "secondary_logo_path" ||
+        col === "secondary_logo_media_type";
+      if (isIcon && protectIconKeys) {
+        throw new BrandingStoreError(
+          `Could not save branding row: ${msg}`,
+          "ROW_WRITE_FAILED",
+          500,
+          POSTGREST_SCHEMA_HINT,
+        );
+      }
+      if (isSecondary && protectSecondaryKeys) {
+        throw new BrandingStoreError(
+          `Could not save branding row: ${msg}`,
+          "ROW_WRITE_FAILED",
+          500,
+          POSTGREST_SCHEMA_HINT,
+        );
+      }
+      if (col === "palette_extras") droppedPaletteExtrasForRetry = true;
+      if (col === "voice_tone_tags") droppedVoiceToneTagsForRetry = true;
+
+      delete row[col];
+      if (isIcon) stripIconRowKeys(row);
+      if (isSecondary) stripSecondaryRowKeys(row);
+    } else if (/schema cache/i.test(msg)) {
+      if (!protectIconKeys && ("icon_path" in row || "icon_media_type" in row)) {
+        stripIconRowKeys(row);
+      } else if (
+        !protectSecondaryKeys &&
+        ("secondary_logo_path" in row ||
+          "secondary_logo_media_type" in row)
+      ) {
+        stripSecondaryRowKeys(row);
+      } else if ("voice_tone_tags" in row) {
+        droppedVoiceToneTagsForRetry = true;
+        delete row.voice_tone_tags;
+      } else if ("palette_extras" in row) {
+        droppedPaletteExtrasForRetry = true;
+        delete row.palette_extras;
+      } else {
+        break;
+      }
+    } else {
+      break;
+    }
+
+    rowErr = (
+      await supabase.from("branding_kits").upsert(row, { onConflict: "user_id" })
+    ).error;
+  }
 
   if (rowErr) {
+    const msg = rowErr.message ?? "";
+    const schemaStale =
+      /schema cache/i.test(msg) ||
+      /Could not find the '[^']+' column/i.test(msg);
     throw new BrandingStoreError(
       `Could not save branding row: ${rowErr.message}`,
       "ROW_WRITE_FAILED",
-      502,
+      500,
+      schemaStale ? POSTGREST_SCHEMA_HINT : undefined,
+    );
+  }
+
+  if (
+    droppedPaletteExtrasForRetry &&
+    normalizeExtraPaletteColors(kit.extraPaletteColors).length > 0
+  ) {
+    throw new BrandingStoreError(
+      "Extra palette colours could not be saved because the database API does not expose the palette_extras column yet. Run supabase/repair-branding-kits.sql in your Supabase SQL editor for this project, then try again.",
+      "PALETTE_SCHEMA",
+      500,
+      POSTGREST_SCHEMA_HINT,
+    );
+  }
+  if (
+    droppedVoiceToneTagsForRetry &&
+    normalizeVoiceToneTags(kit.voiceToneTags).length > 0
+  ) {
+    throw new BrandingStoreError(
+      "Voice tone tags could not be saved because the database API does not expose the voice_tone_tags column yet. Run supabase/repair-branding-kits.sql in your Supabase SQL editor for this project, then try again.",
+      "VOICE_TAGS_SCHEMA",
+      500,
+      POSTGREST_SCHEMA_HINT,
     );
   }
 
@@ -390,54 +606,114 @@ export async function loadBrandingKitForGenerate(userId: string): Promise<{
   view: BrandingKitView;
   logoBuffer: Buffer | null;
   logoMediaType: string | null;
+  secondaryLogoBuffer: Buffer | null;
+  secondaryLogoMediaType: string | null;
+  iconBuffer: Buffer | null;
+  iconMediaType: string | null;
 }> {
   if (!userId) {
-    return { view: DEFAULT_BRANDING_KIT_VIEW, logoBuffer: null, logoMediaType: null };
+    return {
+      view: DEFAULT_BRANDING_KIT_VIEW,
+      logoBuffer: null,
+      logoMediaType: null,
+      secondaryLogoBuffer: null,
+      secondaryLogoMediaType: null,
+      iconBuffer: null,
+      iconMediaType: null,
+    };
   }
 
-  const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
+  const supabase = tryCreateSupabaseAdminClient();
+  if (!supabase) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn(
+        "[branding] Supabase admin key missing — generate will use empty branding assets.",
+      );
+    }
+    return {
+      view: DEFAULT_BRANDING_KIT_VIEW,
+      logoBuffer: null,
+      logoMediaType: null,
+      secondaryLogoBuffer: null,
+      secondaryLogoMediaType: null,
+      iconBuffer: null,
+      iconMediaType: null,
+    };
+  }
+
+  const db = supabase;
+
+  const { data, error } = await db
     .from("branding_kits")
     .select("*")
     .eq("user_id", userId)
     .maybeSingle<BrandingRow>();
 
   if (error || !data) {
-    return { view: DEFAULT_BRANDING_KIT_VIEW, logoBuffer: null, logoMediaType: null };
+    return {
+      view: DEFAULT_BRANDING_KIT_VIEW,
+      logoBuffer: null,
+      logoMediaType: null,
+      secondaryLogoBuffer: null,
+      secondaryLogoMediaType: null,
+      iconBuffer: null,
+      iconMediaType: null,
+    };
   }
 
   const bucket = brandingAssetsBucket();
-  const [logoUrl, headingFontUrl, bodyFontUrl] = await Promise.all([
-    signPath(data.logo_path, bucket),
-    signPath(data.heading_font_path, bucket),
-    signPath(data.body_font_path, bucket),
-  ]);
+  const [logoUrl, secondaryLogoUrl, iconUrl, headingFontUrl, bodyFontUrl] =
+    await Promise.all([
+      signPath(db, data.logo_path, bucket),
+      signPath(db, data.secondary_logo_path, bucket),
+      signPath(db, data.icon_path, bucket),
+      signPath(db, data.heading_font_path, bucket),
+      signPath(db, data.body_font_path, bucket),
+    ]);
 
-  let logoBuffer: Buffer | null = null;
-  let logoMediaType: string | null = null;
-  if (data.logo_path) {
-    const { data: blob, error: dlErr } = await supabase.storage
+  async function downloadLogo(
+    path: string | null,
+    rowMediaType: string | null,
+  ): Promise<{ buffer: Buffer | null; mediaType: string | null }> {
+    if (!path) return { buffer: null, mediaType: null };
+    const { data: blob, error: dlErr } = await db.storage
       .from(bucket)
-      .download(data.logo_path);
-    if (!dlErr && blob) {
-      const arrayBuffer = await blob.arrayBuffer();
-      logoBuffer = Buffer.from(arrayBuffer);
-      logoMediaType = data.logo_media_type ?? blob.type ?? null;
-    }
+      .download(path);
+    if (dlErr || !blob) return { buffer: null, mediaType: null };
+    const arrayBuffer = await blob.arrayBuffer();
+    return {
+      buffer: Buffer.from(arrayBuffer),
+      mediaType: rowMediaType ?? blob.type ?? null,
+    };
   }
+
+  const primaryDl = await downloadLogo(data.logo_path, data.logo_media_type);
+  const secondaryDl = await downloadLogo(
+    data.secondary_logo_path,
+    data.secondary_logo_media_type,
+  );
+  const iconDl = await downloadLogo(data.icon_path, data.icon_media_type);
 
   return {
     view: {
       kit: rowToKit(data),
       logoUrl,
       logoMediaType: data.logo_media_type,
+      secondaryLogoUrl,
+      secondaryLogoMediaType: data.secondary_logo_media_type,
+      iconUrl,
+      iconMediaType: data.icon_media_type,
       headingFontUrl,
       headingFontMediaType: data.heading_font_media_type,
       bodyFontUrl,
       bodyFontMediaType: data.body_font_media_type,
     },
-    logoBuffer,
-    logoMediaType,
+    logoBuffer: primaryDl.buffer,
+    logoMediaType: primaryDl.mediaType,
+    secondaryLogoBuffer: secondaryDl.buffer,
+    secondaryLogoMediaType: secondaryDl.mediaType,
+    iconBuffer: iconDl.buffer,
+    iconMediaType: iconDl.mediaType,
   };
 }
 

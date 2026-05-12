@@ -33,6 +33,7 @@ export function SignInPanel() {
   const [magicSent, setMagicSent] = useState(false);
   const [loadingPassword, setLoadingPassword] = useState(false);
   const [loadingMagic, setLoadingMagic] = useState(false);
+  const [loadingReset, setLoadingReset] = useState(false);
 
   const onPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,6 +53,29 @@ export function SignInPanel() {
       router.replace("/");
     } finally {
       setLoadingPassword(false);
+    }
+  };
+
+  const onForgotPassword = async () => {
+    const trimmed = email.trim();
+    if (!trimmed) {
+      toast.error("Enter your email first, then tap Forgot password.");
+      return;
+    }
+    setLoadingReset(true);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const redirectTo = `${callbackBaseUrl()}/auth/callback?next=/auth/update-password`;
+      const { error } = await supabase.auth.resetPasswordForEmail(trimmed, {
+        redirectTo,
+      });
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      toast.success("If that email has an account, you will get a reset link shortly.");
+    } finally {
+      setLoadingReset(false);
     }
   };
 
@@ -120,6 +144,17 @@ export function SignInPanel() {
                 onChange={setPassword}
                 disabled={loadingPassword}
               />
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="link"
+                  className="text-muted-foreground h-auto px-0 py-0 text-xs font-normal underline-offset-4 hover:underline"
+                  onClick={() => void onForgotPassword()}
+                  disabled={loadingPassword || loadingReset}
+                >
+                  {loadingReset ? "Sending reset link…" : "Forgot password?"}
+                </Button>
+              </div>
               <Button
                 type="submit"
                 disabled={loadingPassword}

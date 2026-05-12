@@ -2,7 +2,7 @@ import type { BrandingKitView } from "@/lib/branding/types";
 
 export async function importBrandingFromPdf(file: File): Promise<
   | { ok: true; view: BrandingKitView; warnings: string[] }
-  | { ok: false; error: string }
+  | { ok: false; error: string; hint?: string }
 > {
   const form = new FormData();
   form.set("pdf", file);
@@ -16,12 +16,16 @@ export async function importBrandingFromPdf(file: File): Promise<
       view?: BrandingKitView;
       warnings?: string[];
       error?: string;
+      hint?: string;
     };
 
     if (!res.ok) {
       return {
         ok: false,
         error: data.error ?? "Could not import from this PDF.",
+        ...(typeof data.hint === "string" && data.hint
+          ? { hint: data.hint }
+          : {}),
       };
     }
     if (!data.view) {

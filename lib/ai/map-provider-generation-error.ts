@@ -51,6 +51,6 @@ export function mapProviderGenerationError(
     httpStatus: 422,
     code: "INPUT_IMAGE_PERSON_POLICY",
     error:
-      "The image model refused this request: an input image may show a real or recognizable person. That can include your product photo, extra reference images, or a brand logo with a face. Try a packshot with no people, remove reference images, or turn off “Apply branding” if your logo is photographic.",
+      "The image model refused this request: an input image may show a real or recognizable person. That can include your product photo, extra reference images, or a brand mark (logo or icon) with a face. Try a packshot with no people, remove reference images, or turn off “Apply branding” if your brand images are photographic.",
   };
 }

@@ -2,7 +2,7 @@ import type { BrandingKitView } from "@/lib/branding/types";
 
 export type ImportBrandingFromUrlResult =
   | { ok: true; view: BrandingKitView; warnings: string[] }
-  | { ok: false; error: string; status?: number };
+  | { ok: false; error: string; status?: number; hint?: string };
 
 export async function importBrandingFromUrl(
   url: string,
@@ -21,12 +21,16 @@ export async function importBrandingFromUrl(
       view?: BrandingKitView;
       warnings?: string[];
       error?: string;
+      hint?: string;
     };
     if (!res.ok) {
       return {
         ok: false,
         error: data.error ?? "Could not import from this URL.",
         status: res.status,
+        ...(typeof data.hint === "string" && data.hint
+          ? { hint: data.hint }
+          : {}),
       };
     }
     if (!data.view) {

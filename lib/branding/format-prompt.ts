@@ -55,6 +55,10 @@ export function formatBrandingForPrompt(view: BrandingKitView): string {
   if (p) colors.push(`primary ${p}`);
   if (s) colors.push(`secondary ${s}`);
   if (a) colors.push(`accent ${a}`);
+  for (const x of kit.extraPaletteColors ?? []) {
+    const c = clean(x);
+    if (c) colors.push(c);
+  }
   if (colors.length) lines.push(`Palette: ${colors.join(", ")}`);
 
   const headingLine = formatTypographyLine(
@@ -85,14 +89,20 @@ export function formatBrandingForPrompt(view: BrandingKitView): string {
 }
 
 export function hasBrandingContent(view: BrandingKitView): boolean {
-  return formatBrandingForPrompt(view).length > 0 || Boolean(view.logoUrl);
+  return (
+    formatBrandingForPrompt(view).length > 0 ||
+    Boolean(view.logoUrl || view.secondaryLogoUrl || view.iconUrl)
+  );
 }
 
 /** Compact preview used by the generate UI without shipping the full view. */
 export function brandingViewToMeta(view: BrandingKitView): BrandingKitMeta {
   const { kit } = view;
   const hasPalette = Boolean(
-    clean(kit.primaryColor) || clean(kit.secondaryColor) || clean(kit.accentColor),
+    clean(kit.primaryColor) ||
+      clean(kit.secondaryColor) ||
+      clean(kit.accentColor) ||
+      (kit.extraPaletteColors ?? []).some((c) => clean(c).length > 0),
   );
   const hasTypography =
     typographySlotHasSelection(kit.headingTypography) ||
@@ -102,7 +112,10 @@ export function brandingViewToMeta(view: BrandingKitView): BrandingKitMeta {
     Array.isArray(kit.voiceToneTags) &&
     (kit.voiceToneTags ?? []).some((t) => clean(t).length > 0);
   const hasExtraNotes = clean(kit.extraNotes).length > 0;
-  const hasLogo = Boolean(view.logoUrl);
+  const hasPrimaryLogo = Boolean(view.logoUrl);
+  const hasSecondaryLogo = Boolean(view.secondaryLogoUrl);
+  const hasIcon = Boolean(view.iconUrl);
+  const hasLogo = hasPrimaryLogo || hasSecondaryLogo || hasIcon;
   const hasContent =
     hasPalette ||
     hasTypography ||
@@ -121,6 +134,9 @@ export function brandingViewToMeta(view: BrandingKitView): BrandingKitMeta {
     hasVoiceToneTags,
     hasExtraNotes,
     hasLogo,
+    hasPrimaryLogo,
+    hasSecondaryLogo,
+    hasIcon,
   };
 }
 

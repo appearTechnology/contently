@@ -6,9 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "patch-package"
   },
   "dependencies": {
+    "@ai-sdk/react": "^3.0.179",
     "@base-ui/react": "^1.4.1",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.105.4",
@@ -35,6 +37,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
+    "patch-package": "^8.0.1",
     "pg": "^8.20.0",
     "tailwindcss": "^4",
     "typescript": "^5"

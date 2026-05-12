@@ -121,6 +121,10 @@ export async function POST(request: Request) {
   let brandContext = "";
   let brandLogoBuffer: Buffer | undefined;
   let brandLogoMediaType: string | undefined;
+  let brandSecondaryLogoBuffer: Buffer | undefined;
+  let brandSecondaryLogoMediaType: string | undefined;
+  let brandIconBuffer: Buffer | undefined;
+  let brandIconMediaType: string | undefined;
 
   if (applyBranding) {
     const branding = await loadBrandingKitForGenerate(userId);
@@ -138,6 +142,22 @@ export async function POST(request: Request) {
     ) {
       brandLogoBuffer = branding.logoBuffer;
       brandLogoMediaType = branding.logoMediaType;
+    }
+    if (
+      branding.secondaryLogoBuffer &&
+      branding.secondaryLogoMediaType &&
+      ALLOWED_MEDIA.has(branding.secondaryLogoMediaType)
+    ) {
+      brandSecondaryLogoBuffer = branding.secondaryLogoBuffer;
+      brandSecondaryLogoMediaType = branding.secondaryLogoMediaType;
+    }
+    if (
+      branding.iconBuffer &&
+      branding.iconMediaType &&
+      ALLOWED_MEDIA.has(branding.iconMediaType)
+    ) {
+      brandIconBuffer = branding.iconBuffer;
+      brandIconMediaType = branding.iconMediaType;
     }
   }
 
@@ -183,6 +203,15 @@ export async function POST(request: Request) {
       ...(brandContext ? { brandContext } : {}),
       ...(brandLogoBuffer && brandLogoMediaType
         ? { brandLogoBuffer, brandLogoMediaType }
+        : {}),
+      ...(brandSecondaryLogoBuffer && brandSecondaryLogoMediaType
+        ? {
+            brandSecondaryLogoBuffer,
+            brandSecondaryLogoMediaType,
+          }
+        : {}),
+      ...(brandIconBuffer && brandIconMediaType
+        ? { brandIconBuffer, brandIconMediaType }
         : {}),
     });
 

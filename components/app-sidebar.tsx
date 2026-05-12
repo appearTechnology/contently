@@ -6,6 +6,7 @@ import {
   BookOpen,
   Home,
   ImagePlus,
+  MessageSquare,
   Palette,
   Sparkles,
 } from "lucide-react";
@@ -87,6 +88,16 @@ export function AppSidebar() {
                 >
                   <Palette aria-hidden />
                   <span>Branding</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={pathname.startsWith("/studio")}
+                  tooltip="Studio"
+                  render={<Link href="/studio" />}
+                >
+                  <MessageSquare aria-hidden />
+                  <span>Studio</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

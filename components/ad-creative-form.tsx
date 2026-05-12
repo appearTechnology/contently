@@ -568,8 +568,16 @@ function brandingPreview(meta: BrandingKitMeta): string {
   if (meta.hasVoiceTone) parts.push("voice");
   if (meta.hasVoiceToneTags) parts.push("tone tags");
   if (meta.hasExtraNotes) parts.push("notes");
-  if (meta.hasLogo) parts.push("logo");
+  if (meta.hasLogo) {
+    const marks: string[] = [];
+    if (meta.hasPrimaryLogo) marks.push("primary");
+    if (meta.hasSecondaryLogo) marks.push("secondary");
+    if (meta.hasIcon) marks.push("icon");
+    parts.push(
+      marks.length > 1 ? `brand marks (${marks.join(", ")})` : "brand mark",
+    );
+  }
   return parts.length > 0
     ? `Using: ${parts.join(" · ")}`
-    : "Logo reference will be sent with your product image.";
+    : "Brand reference images can be sent with your product image when you save a kit.";
 }

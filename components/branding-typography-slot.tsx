@@ -180,6 +180,33 @@ export function BrandingTypographySlot({
     customFontUrl,
   ]);
 
+  /** Human-readable font name for labels / preview caption. */
+  const resolvedFontName = useMemo(() => {
+    if (slot.kind === "manual") {
+      const line = slot.manual.trim().split(/\n/)[0]?.trim();
+      return line.length > 0 ? line : null;
+    }
+    if (slot.kind === "google") {
+      const g = slot.googleFamily.trim();
+      return g.length > 0 ? g : null;
+    }
+    if (slot.kind === "custom") {
+      const fam = slot.customFamily.trim();
+      if (fam) return fam;
+      if (pendingFontFile) {
+        return pendingFontFile.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+      }
+      return null;
+    }
+    return null;
+  }, [
+    slot.kind,
+    slot.manual,
+    slot.googleFamily,
+    slot.customFamily,
+    pendingFontFile,
+  ]);
+
   const onKindChange = (value: string | null) => {
     if (value !== "manual" && value !== "google" && value !== "custom") return;
     onChange({ ...slot, kind: value as TypographySlotKind });
@@ -245,15 +272,15 @@ export function BrandingTypographySlot({
 
       {slot.kind === "manual" ? (
         <div className="space-y-2">
-          <Label htmlFor={`${idBase}-manual`}>Description</Label>
+          <Label htmlFor={`${idBase}-manual`}>Font name</Label>
           <Textarea
             id={`${idBase}-manual`}
             value={slot.manual}
             onChange={(e) => onChange({ ...slot, manual: e.target.value })}
             placeholder={
               previewSize === "heading"
-                ? "e.g. Condensed grotesk, high contrast, tight tracking"
-                : "e.g. Neutral sans, generous line height, readable at small sizes"
+                ? "e.g. Inter Display — geometric sans, tight tracking"
+                : "e.g. Source Sans 3 — neutral sans, readable at small sizes"
             }
             rows={3}
             className="resize-y min-h-[72px]"
@@ -263,7 +290,7 @@ export function BrandingTypographySlot({
 
       {slot.kind === "google" ? (
         <div className="space-y-2">
-          <Label htmlFor={`${idBase}-google`}>Font family</Label>
+          <Label htmlFor={`${idBase}-google`}>Font name</Label>
           <Select
             value={slot.googleFamily.trim() ? slot.googleFamily : NONE_GOOGLE}
             onValueChange={onGoogleChange}
@@ -316,9 +343,7 @@ export function BrandingTypographySlot({
             ) : null}
           </div>
           <div className="space-y-2">
-            <Label htmlFor={`${idBase}-custom-name`}>
-              Family name (for previews and prompts)
-            </Label>
+            <Label htmlFor={`${idBase}-custom-name`}>Font name</Label>
             <Input
               id={`${idBase}-custom-name`}
               value={slot.customFamily}
@@ -341,6 +366,13 @@ export function BrandingTypographySlot({
 
       <div className="space-y-2">
         <p className="text-muted-foreground text-xs font-medium">Preview</p>
+        {resolvedFontName ? (
+          <p className="text-foreground text-sm font-semibold tracking-tight">
+            {resolvedFontName}
+          </p>
+        ) : (
+          <p className="text-muted-foreground text-sm">No font name yet</p>
+        )}
         <div
           className={cn(
             "rounded-md border bg-background px-3 py-3 text-foreground",

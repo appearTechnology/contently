@@ -35,6 +35,8 @@ export type BrandingKit = {
   primaryColor: string;
   secondaryColor: string;
   accentColor: string;
+  /** Additional palette swatches beyond primary / secondary / accent. */
+  extraPaletteColors: string[];
   headingTypography: TypographySlot;
   bodyTypography: TypographySlot;
   voiceTone: string;
@@ -50,6 +52,7 @@ export const DEFAULT_BRANDING_KIT: BrandingKit = {
   primaryColor: "",
   secondaryColor: "",
   accentColor: "",
+  extraPaletteColors: [],
   headingTypography: emptyTypographySlot(),
   bodyTypography: emptyTypographySlot(),
   voiceTone: "",
@@ -64,8 +67,13 @@ export const DEFAULT_BRANDING_KIT: BrandingKit = {
  */
 export type BrandingKitView = {
   kit: BrandingKit;
+  /** Primary / default lockup (historically `logo_*` in the database). */
   logoUrl: string | null;
   logoMediaType: string | null;
+  secondaryLogoUrl: string | null;
+  secondaryLogoMediaType: string | null;
+  iconUrl: string | null;
+  iconMediaType: string | null;
   headingFontUrl: string | null;
   headingFontMediaType: string | null;
   bodyFontUrl: string | null;
@@ -76,6 +84,10 @@ export const DEFAULT_BRANDING_KIT_VIEW: BrandingKitView = {
   kit: DEFAULT_BRANDING_KIT,
   logoUrl: null,
   logoMediaType: null,
+  secondaryLogoUrl: null,
+  secondaryLogoMediaType: null,
+  iconUrl: null,
+  iconMediaType: null,
   headingFontUrl: null,
   headingFontMediaType: null,
   bodyFontUrl: null,
@@ -94,7 +106,11 @@ export type BrandingKitMeta = {
   hasVoiceTone: boolean;
   hasVoiceToneTags: boolean;
   hasExtraNotes: boolean;
+  /** True if any of primary, secondary, or icon mark is present. */
   hasLogo: boolean;
+  hasPrimaryLogo: boolean;
+  hasSecondaryLogo: boolean;
+  hasIcon: boolean;
 };
 
 export const EMPTY_BRANDING_KIT_META: BrandingKitMeta = {
@@ -106,4 +122,7 @@ export const EMPTY_BRANDING_KIT_META: BrandingKitMeta = {
   hasVoiceToneTags: false,
   hasExtraNotes: false,
   hasLogo: false,
+  hasPrimaryLogo: false,
+  hasSecondaryLogo: false,
+  hasIcon: false,
 };

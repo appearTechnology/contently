@@ -85,6 +85,7 @@ export function mergePdfBrandingIntoExistingKit(
         notes && notes.length > 0
           ? notes.slice(0, 4000)
           : existing.extraNotes,
+      extraPaletteColors: existing.extraPaletteColors ?? [],
     },
   };
 }

@@ -45,15 +45,6 @@ export const MODELS: ModelConfig[] = [
     imageStrategy: "generate-image-prompt",
   },
   {
-    id: "gpt-5.5",
-    gatewayModel: "openai/gpt-5.5",
-    label: "GPT-5.5",
-    description:
-      "OpenAI multimodal LLM. Note: GPT-5.5 returns text, not images — selecting it for photo ads will fail at generation time.",
-    capabilities: ["image"],
-    imageStrategy: "multimodal-generate-text",
-  },
-  {
     id: "seedance-2",
     gatewayModel: "bytedance/seedance-2.0",
     label: "Seedance 2.0",

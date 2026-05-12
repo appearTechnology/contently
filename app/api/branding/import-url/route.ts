@@ -130,7 +130,11 @@ export async function POST(request: Request) {
         }
       }
       return NextResponse.json(
-        { error: err.message, code: err.code },
+        {
+          error: err.message,
+          code: err.code,
+          ...(err.hint ? { hint: err.hint } : {}),
+        },
         { status: err.status },
       );
     }

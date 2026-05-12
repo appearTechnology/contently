@@ -7,6 +7,7 @@ import {
   type TypographySlotKind,
 } from "@/lib/branding/types";
 import { normalizeVoiceToneTags } from "@/lib/branding/voice-tone-tags";
+import { normalizeExtraPaletteColors } from "@/lib/branding/extra-palette-colors";
 import {
   BrandingStoreError,
   getBrandingKitView,
@@ -48,6 +49,7 @@ function parseKitJson(raw: unknown): BrandingKit | null {
     primaryColor: clean(r.primaryColor).slice(0, 32),
     secondaryColor: clean(r.secondaryColor).slice(0, 32),
     accentColor: clean(r.accentColor).slice(0, 32),
+    extraPaletteColors: normalizeExtraPaletteColors(r.extraPaletteColors),
     headingTypography: parseTypography(r.headingTypography),
     bodyTypography: parseTypography(r.bodyTypography),
     voiceTone: clean(r.voiceTone).slice(0, 4000),
@@ -134,6 +136,12 @@ export async function PUT(request: Request) {
 
   try {
     const logo = await fileToAsset(form.get("logo"), "logo", MAX_LOGO_BYTES);
+    const secondaryLogo = await fileToAsset(
+      form.get("secondaryLogo"),
+      "secondary-logo",
+      MAX_LOGO_BYTES,
+    );
+    const icon = await fileToAsset(form.get("icon"), "icon", MAX_LOGO_BYTES);
     const headingFont = await fileToAsset(
       form.get("headingFont"),
       "heading-font",
@@ -149,9 +157,13 @@ export async function PUT(request: Request) {
       userId,
       kit,
       logo,
+      secondaryLogo,
+      icon,
       headingFont,
       bodyFont,
       removeLogo: form.get("removeLogo") === "1",
+      removeSecondaryLogo: form.get("removeSecondaryLogo") === "1",
+      removeIcon: form.get("removeIcon") === "1",
       removeHeadingFont: form.get("removeHeadingFont") === "1",
       removeBodyFont: form.get("removeBodyFont") === "1",
     });
@@ -160,7 +172,11 @@ export async function PUT(request: Request) {
   } catch (err) {
     if (err instanceof BrandingStoreError) {
       return NextResponse.json(
-        { error: err.message, code: err.code },
+        {
+          error: err.message,
+          code: err.code,
+          ...(err.hint ? { hint: err.hint } : {}),
+        },
         { status: err.status },
       );
     }
