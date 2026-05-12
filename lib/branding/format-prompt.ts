@@ -73,6 +73,11 @@ export function formatBrandingForPrompt(view: BrandingKitView): string {
   const voice = clean(kit.voiceTone);
   if (voice) lines.push(`Voice & tone:\n${voice}`);
 
+  const tags = (kit.voiceToneTags ?? []).filter((t) => clean(t).length > 0);
+  if (tags.length > 0) {
+    lines.push(`Tone tags (steer copy style): ${tags.join(", ")}`);
+  }
+
   const extra = clean(kit.extraNotes);
   if (extra) lines.push(`Additional brand notes:\n${extra}`);
 
@@ -93,12 +98,16 @@ export function brandingViewToMeta(view: BrandingKitView): BrandingKitMeta {
     typographySlotHasSelection(kit.headingTypography) ||
     typographySlotHasSelection(kit.bodyTypography);
   const hasVoiceTone = clean(kit.voiceTone).length > 0;
+  const hasVoiceToneTags =
+    Array.isArray(kit.voiceToneTags) &&
+    (kit.voiceToneTags ?? []).some((t) => clean(t).length > 0);
   const hasExtraNotes = clean(kit.extraNotes).length > 0;
   const hasLogo = Boolean(view.logoUrl);
   const hasContent =
     hasPalette ||
     hasTypography ||
     hasVoiceTone ||
+    hasVoiceToneTags ||
     hasExtraNotes ||
     hasLogo ||
     clean(kit.brandName).length > 0 ||
@@ -109,6 +118,7 @@ export function brandingViewToMeta(view: BrandingKitView): BrandingKitMeta {
     hasPalette,
     hasTypography,
     hasVoiceTone,
+    hasVoiceToneTags,
     hasExtraNotes,
     hasLogo,
   };

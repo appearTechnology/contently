@@ -5,10 +5,68 @@ export const MAX_HTML_BYTES = 2 * 1024 * 1024;
 export const MAX_CSS_BYTES = 512 * 1024;
 export const MAX_LOGO_BYTES = 512 * 1024;
 const MAX_REDIRECTS = 8;
-const FETCH_TIMEOUT_MS = 15_000;
+const FETCH_TIMEOUT_MS = 25_000;
 
+/** Browser-like UA — many sites block non-browser / generic bot strings (fewer false FETCH_FAILED). */
 const USER_AGENT =
-  "Mozilla/5.0 (compatible; AdStudioBrandImport/1.0; +https://vercel.com)";
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
+const FETCH_HEADERS_BASE = {
+  "User-Agent": USER_AGENT,
+  "Accept-Language": "en-US,en;q=0.9",
+} as const;
+
+function rootCause(err: unknown): unknown {
+  let cur: unknown = err;
+  for (let i = 0; i < 6; i++) {
+    if (cur instanceof Error && cur.cause !== undefined) cur = cur.cause;
+    else break;
+  }
+  return cur;
+}
+
+/** Turns low-level Node / undici errors into messages suitable for API JSON + toasts. */
+export function humanizeFetchError(err: unknown): string {
+  const e = rootCause(err) as NodeJS.ErrnoException & Error;
+  const code = typeof e?.code === "string" ? e.code : "";
+  const msg = e instanceof Error ? e.message : String(err);
+
+  switch (code) {
+    case "ENOTFOUND":
+    case "EAI_AGAIN":
+      return "Could not resolve that domain. Check the spelling or try again.";
+    case "ECONNREFUSED":
+      return "Connection refused — the server may be down or blocking automated requests.";
+    case "ETIMEDOUT":
+    case "ESOCKETTIMEDOUT":
+      return "Connection timed out — try again or use a different URL.";
+    case "ENETUNREACH":
+    case "EHOSTUNREACH":
+      return "Network unreachable — check the URL or try from another network.";
+    case "CERT_HAS_EXPIRED":
+    case "UNABLE_TO_VERIFY_LEAF_SIGNATURE":
+    case "DEPTH_ZERO_SELF_SIGNED_CERT":
+    case "ERR_TLS_CERT_ALTNAME_INVALID":
+      return "Could not verify the site’s SSL certificate — try opening the URL in a browser first.";
+    default:
+      break;
+  }
+
+  const lower = msg.toLowerCase();
+  if (
+    lower.includes("certificate") ||
+    lower.includes("ssl") ||
+    lower.includes("tls") ||
+    lower.includes("x509")
+  ) {
+    return "Could not establish a secure connection to this site.";
+  }
+  if (lower.includes("getaddrinfo") || lower.includes("name resolution")) {
+    return "Could not resolve that domain. Check the spelling or try again.";
+  }
+
+  return msg.length > 200 ? `${msg.slice(0, 197)}…` : msg;
+}
 
 export class SafeFetchError extends Error {
   constructor(
@@ -17,6 +75,7 @@ export class SafeFetchError extends Error {
       | "FORBIDDEN_HOST"
       | "TOO_MANY_REDIRECTS"
       | "FETCH_FAILED"
+      | "FETCH_TIMEOUT"
       | "TOO_LARGE"
       | "BAD_STATUS",
     message: string,
@@ -76,8 +135,8 @@ async function assertHostnameSafe(hostname: string): Promise<void> {
   let records: { address: string; family: number }[];
   try {
     records = await dns.lookup(hostname, { all: true });
-  } catch {
-    throw new SafeFetchError("FETCH_FAILED", "Could not resolve hostname.");
+  } catch (e) {
+    throw new SafeFetchError("FETCH_FAILED", humanizeFetchError(e));
   }
 
   if (records.length === 0) {
@@ -183,15 +242,23 @@ export async function safeFetchWithRedirects(
         redirect: "manual",
         signal: controller.signal,
         headers: {
-          "User-Agent": USER_AGENT,
+          ...FETCH_HEADERS_BASE,
           Accept: acceptHeader,
           "Accept-Encoding": "identity",
         },
       });
     } catch (e) {
       clearTimeout(timer);
-      const msg = e instanceof Error ? e.message : "Request failed";
-      throw new SafeFetchError("FETCH_FAILED", msg);
+      const aborted =
+        e instanceof Error &&
+        (e.name === "AbortError" || /abort/i.test(e.message));
+      if (aborted) {
+        throw new SafeFetchError(
+          "FETCH_TIMEOUT",
+          `The page took longer than ${FETCH_TIMEOUT_MS / 1000} seconds to respond. Try again or use a different URL.`,
+        );
+      }
+      throw new SafeFetchError("FETCH_FAILED", humanizeFetchError(e));
     }
     clearTimeout(timer);
 
@@ -227,7 +294,13 @@ export async function safeFetchWithRedirects(
       );
     }
 
-    const buf = await readBodyWithLimit(response, maxBytes);
+    let buf: ArrayBuffer;
+    try {
+      buf = await readBodyWithLimit(response, maxBytes);
+    } catch (e) {
+      if (e instanceof SafeFetchError) throw e;
+      throw new SafeFetchError("FETCH_FAILED", humanizeFetchError(e));
+    }
     const contentType = response.headers.get("content-type") ?? undefined;
     return {
       finalUrl: current.href,

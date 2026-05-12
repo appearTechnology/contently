@@ -33,6 +33,10 @@ import {
   type BrandingKit,
   type BrandingKitView,
 } from "@/lib/branding/types";
+import {
+  MAX_VOICE_TONE_TAGS,
+  normalizeVoiceToneTags,
+} from "@/lib/branding/voice-tone-tags";
 import { saveBrandingKit } from "@/lib/branding/storage";
 import { cn } from "@/lib/utils";
 
@@ -495,6 +499,27 @@ export function BrandingKitForm({
             rows={4}
             className="resize-y min-h-[100px]"
           />
+          <div className="space-y-2 pt-2">
+            <Label htmlFor="voice-tone-tags">Tone tags</Label>
+            <Input
+              id="voice-tone-tags"
+              value={(kit.voiceToneTags ?? []).join(", ")}
+              onChange={(e) =>
+                setKit({
+                  ...kit,
+                  voiceToneTags: normalizeVoiceToneTags(
+                    e.target.value.split(",").map((s) => s.trim()),
+                  ),
+                })
+              }
+              placeholder="e.g. direct, playful, premium — comma-separated"
+              autoComplete="off"
+            />
+            <p className="text-muted-foreground text-xs leading-relaxed">
+              Short labels merged into prompts to steer copy style (max{" "}
+              {MAX_VOICE_TONE_TAGS} tags).
+            </p>
+          </div>
         </CardContent>
       </Card>
 

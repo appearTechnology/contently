@@ -1,37 +1,46 @@
-import { auth } from "@clerk/nextjs/server";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import type { User } from "@supabase/supabase-js";
+import { supabaseAnonEnv } from "@/lib/supabase/env";
 
 /**
- * Per-request Supabase client that forwards the signed-in user's Clerk session
- * token. Use this when you want RLS policies (`auth.jwt() ->> 'sub'`) to apply.
- *
- * Requires Clerk Native Third-Party Auth to be configured in the Supabase
- * Dashboard (Authentication → Third-Party Auth → Clerk). Without that
- * configuration, anon-token requests will be rejected by RLS.
- *
- * For the current server-only access pattern in this app, prefer
- * `createSupabaseAdminClient()` from `lib/supabase/admin.ts` and scope every
- * call by Clerk userId in code. This helper is exported for future use cases
- * (e.g. browser → Supabase direct reads).
+ * Per-request Supabase client with the user session from cookies.
+ * Use `getUser()` for authorization; do not trust `getSession()` alone for gating.
  */
-export function createSupabaseServerClient(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
-  const anonKey =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY;
-  if (!url || !anonKey) {
-    throw new Error(
-      "Missing Supabase credentials: set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY",
-    );
-  }
-  return createClient(url, anonKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-    accessToken: async () => {
-      const { getToken } = await auth();
-      return (await getToken()) ?? null;
+export async function getSupabaseServerClient() {
+  const cookieStore = await cookies();
+  const { url, anonKey } = supabaseAnonEnv();
+
+  return createServerClient(url, anonKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        } catch {
+          // Cookie writes can fail outside a Server Action / Route Handler; `proxy.ts`
+          // refreshes the session for navigations.
+        }
+      },
     },
   });
+}
+
+export async function getSupabaseAuthUser(): Promise<User | null> {
+  const supabase = await getSupabaseServerClient();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+  if (error || !user) return null;
+  return user;
+}
+
+export async function getAuthenticatedUserId(): Promise<string | null> {
+  const user = await getSupabaseAuthUser();
+  return user?.id ?? null;
 }

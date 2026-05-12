@@ -8,7 +8,7 @@ export type GenerateOutputFormat = "photo" | "video";
 /**
  * Builds the multipart body for `POST /api/generate`. Branding (text + logo)
  * is no longer included here — the server reads it from Supabase using the
- * authenticated Clerk userId when `applyBranding === "1"`.
+ * authenticated Supabase user id when `applyBranding === "1"`.
  */
 export function buildGenerateCreativeFormData(params: {
   primaryImage: File;

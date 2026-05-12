@@ -1,5 +1,5 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { getAuthenticatedUserId } from "@/lib/supabase/server";
 import {
   defaultModelIdForCapability,
   getModelById,
@@ -34,7 +34,7 @@ function extensionForMediaType(mediaType: string): string {
 }
 
 export async function POST(request: Request) {
-  const { userId } = await auth();
+  const userId = await getAuthenticatedUserId();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

@@ -1,12 +1,12 @@
-import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { ClerkSignUpPanel } from "@/components/clerk-sign-up-panel";
+import { SignUpPanel } from "@/components/sign-up-panel";
+import { getSupabaseAuthUser } from "@/lib/supabase/server";
 
 export default async function SignUpPage() {
-  const { userId } = await auth();
-  if (userId) {
+  const user = await getSupabaseAuthUser();
+  if (user) {
     redirect("/");
   }
 
-  return <ClerkSignUpPanel />;
+  return <SignUpPanel />;
 }

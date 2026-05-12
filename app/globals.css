@@ -128,3 +128,66 @@
     @apply font-sans;
   }
 }
+
+/* Onboarding “brand DNA” loading overlay */
+@keyframes brand-dna-bar {
+  0%,
+  100% {
+    transform: scaleY(0.28);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes brand-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes brand-pulse-soft {
+  0%,
+  100% {
+    opacity: 0.65;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+@layer utilities {
+  .animate-brand-dna-bar {
+    animation: brand-dna-bar 1.15s ease-in-out infinite;
+  }
+  .animate-brand-orbit {
+    animation: brand-orbit 12s linear infinite;
+  }
+  .animate-brand-orbit-reverse {
+    animation: brand-orbit 18s linear infinite reverse;
+  }
+  .animate-brand-pulse-soft {
+    animation: brand-pulse-soft 2s ease-in-out infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-brand-dna-bar,
+  .animate-brand-orbit,
+  .animate-brand-orbit-reverse,
+  .animate-brand-pulse-soft {
+    animation: none !important;
+  }
+  .animate-brand-dna-bar {
+    opacity: 0.85;
+    transform: scaleY(0.65);
+  }
+  .animate-brand-pulse-soft {
+    opacity: 1;
+    transform: none;
+  }
+}

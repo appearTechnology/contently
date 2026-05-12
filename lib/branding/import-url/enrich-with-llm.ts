@@ -6,6 +6,7 @@ export type LlmEnrichment = {
   brandName?: string;
   tagline?: string;
   voiceTone?: string;
+  voiceToneTags?: string[];
   extraNotes?: string;
 };
 
@@ -30,6 +31,13 @@ const enrichmentSchema = z.object({
     .optional()
     .describe(
       "Concise voice and tone guidelines for ad copy (2–5 sentences). Base only on observable language from the provided text; do not invent product claims.",
+    ),
+  voiceToneTags: z
+    .array(z.string().max(40))
+    .max(12)
+    .optional()
+    .describe(
+      "Short tone labels inferred from page wording for steering prompts (e.g. direct, playful, premium, technical). Lowercase or Title Case; no sentences. Omit if unclear.",
     ),
   extraNotes: z
     .string()
@@ -75,6 +83,7 @@ export async function enrichBrandingWithLLM(params: {
         "- Never invent specific product claims, statistics, awards, or partnerships.",
         "- Prefer omitting optional fields over guessing.",
         "- Voice/tone should describe how the brand sounds based on wording on the page.",
+        "- voiceToneTags: 3–8 distinct adjectives or short phrases only when the page clearly supports them.",
         "- Keep outputs concise and usable as brief prompts for designers.",
       ].join("\n"),
       prompt: userPrompt,

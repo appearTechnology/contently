@@ -1,5 +1,5 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { getAuthenticatedUserId } from "@/lib/supabase/server";
 import { enrichBrandingWithLLM } from "@/lib/branding/import-url/enrich-with-llm";
 import { extractDeterministic } from "@/lib/branding/import-url/extract";
 import { mergeImportedBranding } from "@/lib/branding/import-url/merge-kit";
@@ -16,13 +16,27 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+/** Maps fetch guard failures to HTTP statuses (502 is reserved for true proxy/upstream failures). */
 function statusForSafeFetchError(code: SafeFetchError["code"]): number {
-  if (code === "INVALID_URL" || code === "FORBIDDEN_HOST") return 400;
-  return 502;
+  switch (code) {
+    case "INVALID_URL":
+    case "FORBIDDEN_HOST":
+      return 400;
+    case "TOO_LARGE":
+      return 413;
+    case "BAD_STATUS":
+    case "TOO_MANY_REDIRECTS":
+      return 422;
+    case "FETCH_TIMEOUT":
+      return 504;
+    case "FETCH_FAILED":
+    default:
+      return 503;
+  }
 }
 
 export async function POST(request: Request) {
-  const { userId } = await auth();
+  const userId = await getAuthenticatedUserId();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

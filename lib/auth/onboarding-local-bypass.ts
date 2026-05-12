@@ -1,5 +1,5 @@
 /**
- * Lets `/onboarding` load without Clerk session checks during local UI work.
+ * Lets `/onboarding` load without session redirects during local UI work.
  *
  * Enabled when:
  * - `DISABLE_ONBOARDING_GUARD=1` (or `true` / `yes`) in any environment, or
@@ -16,13 +16,6 @@ function envGuardDisabled(): boolean {
 function isLoopbackHost(hostname: string): boolean {
   const h = hostname.toLowerCase();
   return h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h === "::1";
-}
-
-/** Used by `proxy.ts` — hostname from the incoming request URL. */
-export function shouldAllowOnboardingWithoutSession(hostname: string): boolean {
-  if (envGuardDisabled()) return true;
-  if (process.env.NODE_ENV !== "development") return false;
-  return isLoopbackHost(hostname);
 }
 
 /** Used by the onboarding page — `host` header value (may include port). */

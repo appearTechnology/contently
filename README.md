@@ -26,16 +26,18 @@ This app calls models through the [Vercel AI Gateway](https://vercel.com/docs/ai
 
 Alternatively set `AI_GATEWAY_API_KEY` in `.env.local` (see `.env.example`).
 
-## Clerk: `POST /client/sign_ups` returns 422
+## Supabase Auth (password + magic link)
 
-That response is from **Clerk’s Frontend API** (validation or instance policy), not from this repo’s API routes.
+Sign-in supports **email + password** and **email magic links** via [Supabase Auth](https://supabase.com/docs/guides/auth/passwords) and [`@supabase/ssr`](https://supabase.com/docs/guides/auth/server-side/nextjs). Registration uses **`/sign-up`** (email + password).
 
-1. **See the real reason:** DevTools → **Network** → filter `sign_ups` → open the failed **POST** → **Response** / **Preview** → copy the JSON (`errors`, `long_message`, etc.).
-2. **Typical fixes:** password policy, duplicate email, blocked/disposable email (Dashboard → **Restrictions**), or **Attack Protection** / bot challenge failing in dev (relax or fix ad blockers; check Clerk logs).
-3. **Env:** `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` must be from the **same** Clerk app. Paths in `.env.example` must match your routes (`/sign-in`, `/sign-up`).
-4. **App Router catch-all:** `<SignUp />` / `<SignIn />` are mounted with `path` + `routing="path"` in [`components/clerk-sign-up-panel.tsx`](components/clerk-sign-up-panel.tsx) and [`components/clerk-sign-in-panel.tsx`](components/clerk-sign-in-panel.tsx) so Clerk’s client matches `[[...sign-up]]` / `[[...sign-in]]`.
+1. Copy `.env.example` to `.env.local` and set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`.
+2. Set `NEXT_PUBLIC_SITE_URL` to your deployed origin (no trailing slash), e.g. `https://your-app.vercel.app`. For local dev, `http://localhost:3000` is fine.
+3. In the Supabase dashboard: **Authentication → Providers → Email** — enable **Confirm email** / password sign-up as needed, and magic links or OTP if you use the magic-link tab.
+4. Under **URL configuration**, add **Redirect URLs** that include `{NEXT_PUBLIC_SITE_URL}/auth/callback` (and the same for localhost while developing).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+`proxy.ts` refreshes the session cookie; dashboard routes and API handlers call `getUser()` / `getAuthenticatedUserId()` for authorization. Onboarding completion is stored in **`user_metadata.onboardingComplete`**.
+
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you modify the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to load [Figtree](https://fonts.google.com/specimen/Figtree) for UI, headings, and monospace-styled text.
 

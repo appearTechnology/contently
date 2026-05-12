@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * Service-role Supabase client. Bypasses RLS — every caller MUST scope work by
- * the authenticated Clerk userId before issuing a query or storage call.
+ * the authenticated Supabase Auth user id before issuing a query or storage call.
  *
  * All branding access in this app is server-only (Route Handlers / RSC), so
  * we use this client exclusively. RLS on the branding tables is kept enabled

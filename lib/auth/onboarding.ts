@@ -1,5 +1,5 @@
-/** Clerk `publicMetadata` flag set after URL onboarding. */
-export function isOnboardingCompleteInMetadata(publicMetadata: unknown): boolean {
-  if (!publicMetadata || typeof publicMetadata !== "object") return false;
-  return (publicMetadata as Record<string, unknown>).onboardingComplete === true;
+/** Supabase Auth `user_metadata.onboardingComplete` set after URL onboarding. */
+export function isOnboardingCompleteInMetadata(userMetadata: unknown): boolean {
+  if (!userMetadata || typeof userMetadata !== "object") return false;
+  return (userMetadata as Record<string, unknown>).onboardingComplete === true;
 }

@@ -58,6 +58,13 @@ const pdfBrandingSchema = z.object({
     .describe(
       "Voice, tone, and copy style rules distilled from the guide (2–8 sentences). Base only on what the PDF states.",
     ),
+  voiceToneTags: z
+    .array(z.string().max(40))
+    .max(12)
+    .optional()
+    .describe(
+      "Short tone labels explicitly stated or strongly implied in the guide (e.g. bold, minimalist). Omit if not grounded in the document.",
+    ),
   extraNotes: z
     .string()
     .max(4000)

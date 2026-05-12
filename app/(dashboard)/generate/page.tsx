@@ -1,5 +1,5 @@
-import { auth } from "@clerk/nextjs/server";
 import { AdCreativeForm } from "@/components/ad-creative-form";
+import { getAuthenticatedUserId } from "@/lib/supabase/server";
 import { brandingViewToMeta } from "@/lib/branding/format-prompt";
 import { getBrandingKitView } from "@/lib/branding/server-store";
 import {
@@ -10,7 +10,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  const { userId } = await auth();
+  const userId = await getAuthenticatedUserId();
   const view = userId
     ? await getBrandingKitView(userId)
     : DEFAULT_BRANDING_KIT_VIEW;

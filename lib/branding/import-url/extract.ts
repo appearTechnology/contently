@@ -3,6 +3,7 @@ import {
   emptyTypographySlot,
   type BrandingKit,
 } from "@/lib/branding/types";
+import { isAllowedRasterLogoType } from "@/lib/branding/logo-media";
 import { typographySlotForFamily } from "@/lib/branding/typography-slot-for-family";
 import { safeFetchImage, safeFetchStylesheet } from "./safe-fetch";
 
@@ -199,6 +200,97 @@ function collectLogoUrlsFromJsonLd(value: unknown, out: Set<string>): void {
   }
 }
 
+/** First candidate URL from an HTML srcset attribute (approximate). */
+function parseSrcsetFirstUrl(srcset: string): string | null {
+  const first = srcset.split(",")[0]?.trim();
+  if (!first) return null;
+  const urlPart = first.split(/\s+/)[0]?.trim();
+  return urlPart || null;
+}
+
+function resolveImageHref(pageUrl: URL, raw: string | null | undefined): string | null {
+  if (!raw?.trim()) return null;
+  const t = raw.trim();
+  if (t.startsWith("data:") || t.toLowerCase().startsWith("javascript:")) {
+    return null;
+  }
+  try {
+    const u = new URL(t, pageUrl.href);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    return u.href;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Heuristic DOM logo images: header/nav, #logo, itemprop, class hints.
+ * Priorities sit between JSON-LD (220) and favicon (180).
+ */
+function collectDomLogoCandidates(
+  $: cheerio.CheerioAPI,
+  pageUrl: URL,
+): { href: string; priority: number; source: string }[] {
+  const out: { href: string; priority: number; source: string }[] = [];
+  const seen = new Set<string>();
+
+  function push(
+    hrefRaw: string | null | undefined,
+    srcsetRaw: string | null | undefined,
+    priority: number,
+    source: string,
+  ) {
+    const fromSrc = hrefRaw?.trim() ? hrefRaw : null;
+    const fromSet =
+      !fromSrc && srcsetRaw?.trim() ? parseSrcsetFirstUrl(srcsetRaw) : null;
+    const raw = fromSrc ?? fromSet;
+    const abs = resolveImageHref(pageUrl, raw);
+    if (!abs || seen.has(abs)) return;
+    seen.add(abs);
+    out.push({ href: abs, priority, source });
+  }
+
+  $("#logo img[src], #logo img[srcset]").each((_, el) => {
+    const $el = $(el);
+    push($el.attr("src"), $el.attr("srcset"), 215, "dom:#logo");
+  });
+
+  $(
+    '[itemprop="logo"] img[src], [itemprop="logo"] img[srcset], img[itemprop="logo"][src]',
+  ).each((_, el) => {
+    const $el = $(el);
+    push($el.attr("src"), $el.attr("srcset"), 213, "dom:itemprop-logo");
+  });
+
+  $('header a[href="/"] img[src], header a[href="/"] img[srcset]').each(
+    (_, el) => {
+      const $el = $(el);
+      push($el.attr("src"), $el.attr("srcset"), 211, "dom:header-home-img");
+    },
+  );
+
+  $("nav img[src], nav img[srcset]").each((_, el) => {
+    const $el = $(el);
+    push($el.attr("src"), $el.attr("srcset"), 207, "dom:nav-img");
+  });
+
+  $(
+    'header img[src], header img[srcset], [role="banner"] img[src], [role="banner"] img[srcset]',
+  ).each((_, el) => {
+    const $el = $(el);
+    push($el.attr("src"), $el.attr("srcset"), 204, "dom:header-img");
+  });
+
+  $('.site-header img[src], .site-header img[srcset], [class*="logo" i] img[src], [class*="logo" i] img[srcset]').each(
+    (_, el) => {
+      const $el = $(el);
+      push($el.attr("src"), $el.attr("srcset"), 202, "dom:class-logo");
+    },
+  );
+
+  return out;
+}
+
 function extractJsonLdLogoHrefs($: cheerio.CheerioAPI): string[] {
   const urls = new Set<string>();
   $('script[type="application/ld+json"]').each((_, el) => {
@@ -319,6 +411,9 @@ export async function extractDeterministic(
     logoCandidates.push({ href, priority: 220, source: "json-ld" });
   }
 
+  // In-page images (header, #logo, nav) — many sites only expose the mark here.
+  logoCandidates.push(...collectDomLogoCandidates($, pageUrl));
+
   $('link[rel="icon"][href], link[rel="shortcut icon"][href]').each((_, el) => {
     const href = $(el).attr("href");
     if (!href) return;
@@ -329,10 +424,24 @@ export async function extractDeterministic(
       type === "image/png" ||
       type === "image/jpeg" ||
       type === "image/webp";
-    // Prefer raster favicons; SVG is common but often rejected downstream — still try after PNGs.
     const bonus = looksRaster ? 12 : 0;
     logoCandidates.push({ href, priority: 180 + bonus, source: "favicon" });
   });
+
+  $(
+    'link[rel="mask-icon"][href], link[rel="fluid-icon"][href], link[rel="apple-touch-startup-image"][href]',
+  ).each((_, el) => {
+    const href = $(el).attr("href");
+    if (!href) return;
+    logoCandidates.push({ href, priority: 175, source: "link:mask-or-fluid" });
+  });
+
+  const twImage =
+    metaContent($, 'meta[name="twitter:image"]') ||
+    metaContent($, 'meta[property="twitter:image"]');
+  if (twImage) {
+    logoCandidates.push({ href: twImage, priority: 38, source: "twitter:image" });
+  }
 
   const ogImage = $('meta[property="og:image"]').attr("content");
   if (ogImage?.trim()) {
@@ -348,29 +457,39 @@ export async function extractDeterministic(
   let logoBytes: Buffer | null = null;
   let logoMediaType: string | null = null;
   let logoSource: string | null = null;
+  let notedNonRasterSkip = false;
+
   for (const { href, source } of logoCandidates) {
     try {
       const found = await tryFetchLogo(pageUrl, href, warnings);
-      if (found) {
-        logoBytes = found.buffer;
-        logoMediaType = found.mediaType;
-        logoSource = source;
-        break;
+      if (!found) continue;
+      if (!isAllowedRasterLogoType(found.mediaType)) {
+        if (!notedNonRasterSkip) {
+          notedNonRasterSkip = true;
+          warnings.push(
+            "Some logo candidates were not stored formats (e.g. SVG) — trying other image sources.",
+          );
+        }
+        continue;
       }
+      logoBytes = found.buffer;
+      logoMediaType = found.mediaType;
+      logoSource = source;
+      break;
     } catch {
       /* try next */
     }
   }
 
-  if (logoSource === "og:image") {
+  if (logoSource === "og:image" || logoSource === "twitter:image") {
     warnings.push(
-      "Logo was taken from og:image (social preview), which is often not the real logo — upload the correct file if this looks wrong.",
+      "Logo was taken from a social preview image, which is often not the real logo — upload the correct file in Branding if it looks wrong.",
     );
   }
 
   if (!logoBytes && logoCandidates.length > 0) {
     warnings.push(
-      "Could not load a logo from icons, structured data, or og:image.",
+      "Could not load a storable logo (PNG, JPEG, or WebP) from the page. You can upload one in Branding.",
     );
   }
 

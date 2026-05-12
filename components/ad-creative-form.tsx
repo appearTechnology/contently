@@ -566,6 +566,7 @@ function brandingPreview(meta: BrandingKitMeta): string {
   if (meta.hasPalette) parts.push("palette");
   if (meta.hasTypography) parts.push("typography");
   if (meta.hasVoiceTone) parts.push("voice");
+  if (meta.hasVoiceToneTags) parts.push("tone tags");
   if (meta.hasExtraNotes) parts.push("notes");
   if (meta.hasLogo) parts.push("logo");
   return parts.length > 0

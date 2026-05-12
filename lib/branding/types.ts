@@ -38,6 +38,8 @@ export type BrandingKit = {
   headingTypography: TypographySlot;
   bodyTypography: TypographySlot;
   voiceTone: string;
+  /** Short labels for steering copy tone (e.g. playful, direct); used in prompts. */
+  voiceToneTags: string[];
   extraNotes: string;
 };
 
@@ -51,6 +53,7 @@ export const DEFAULT_BRANDING_KIT: BrandingKit = {
   headingTypography: emptyTypographySlot(),
   bodyTypography: emptyTypographySlot(),
   voiceTone: "",
+  voiceToneTags: [],
   extraNotes: "",
 };
 
@@ -89,6 +92,7 @@ export type BrandingKitMeta = {
   hasPalette: boolean;
   hasTypography: boolean;
   hasVoiceTone: boolean;
+  hasVoiceToneTags: boolean;
   hasExtraNotes: boolean;
   hasLogo: boolean;
 };
@@ -99,6 +103,7 @@ export const EMPTY_BRANDING_KIT_META: BrandingKitMeta = {
   hasPalette: false,
   hasTypography: false,
   hasVoiceTone: false,
+  hasVoiceToneTags: false,
   hasExtraNotes: false,
   hasLogo: false,
 };

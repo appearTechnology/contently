@@ -1,5 +1,6 @@
 import type { BrandingKit } from "@/lib/branding/types";
 import { typographySlotForFamily } from "@/lib/branding/typography-slot-for-family";
+import { normalizeVoiceToneTags } from "@/lib/branding/voice-tone-tags";
 import type { PdfBrandingExtraction } from "./extract-with-llm";
 
 function normalizeHexInput(raw: string | undefined): string {
@@ -24,6 +25,7 @@ function hasAnyPdfField(pdf: PdfBrandingExtraction): boolean {
       pdf.headingFontName?.trim() ||
       pdf.bodyFontName?.trim() ||
       pdf.voiceTone?.trim() ||
+      (pdf.voiceToneTags && pdf.voiceToneTags.length > 0) ||
       pdf.extraNotes?.trim(),
   );
 }
@@ -47,6 +49,10 @@ export function mergePdfBrandingIntoExistingKit(
   const bodyName = pdf.bodyFontName?.trim();
   const voice = pdf.voiceTone?.trim();
   const notes = pdf.extraNotes?.trim();
+  const mergedTags = normalizeVoiceToneTags([
+    ...existing.voiceToneTags,
+    ...(pdf.voiceToneTags ?? []),
+  ]);
 
   return {
     inferredAny,
@@ -73,6 +79,8 @@ export function mergePdfBrandingIntoExistingKit(
         voice && voice.length > 0
           ? voice.slice(0, 2000)
           : existing.voiceTone,
+      voiceToneTags:
+        mergedTags.length > 0 ? mergedTags : existing.voiceToneTags,
       extraNotes:
         notes && notes.length > 0
           ? notes.slice(0, 4000)

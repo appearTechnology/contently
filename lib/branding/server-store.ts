@@ -12,13 +12,14 @@ import {
   type TypographySlot,
   type TypographySlotKind,
 } from "@/lib/branding/types";
+import { normalizeVoiceToneTags } from "@/lib/branding/voice-tone-tags";
 import {
   fontExtensionFromMediaType,
   imageExtensionFromMediaType,
 } from "@/lib/branding/data-url";
+import { ALLOWED_LOGO_MEDIA_TYPES } from "@/lib/branding/logo-media";
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
-const ALLOWED_LOGO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const ALLOWED_FONT_TYPES = new Set([
   "font/woff2",
   "font/woff",
@@ -42,6 +43,7 @@ type BrandingRow = {
   secondary_color: string | null;
   accent_color: string | null;
   voice_tone: string | null;
+  voice_tone_tags: unknown;
   extra_notes: string | null;
   heading_typography: unknown;
   body_typography: unknown;
@@ -81,6 +83,7 @@ function rowToKit(row: BrandingRow): BrandingKit {
     headingTypography: parseTypography(row.heading_typography),
     bodyTypography: parseTypography(row.body_typography),
     voiceTone: row.voice_tone ?? "",
+    voiceToneTags: normalizeVoiceToneTags(row.voice_tone_tags),
     extraNotes: row.extra_notes ?? "",
   };
 }
@@ -99,7 +102,7 @@ async function signPath(
 }
 
 /**
- * Returns the kit view for the given Clerk user. Resolves to the default
+ * Returns the kit view for the given Supabase Auth user id. Resolves to the default
  * (empty) view if the row does not yet exist — caller can insert on first save.
  */
 export async function getBrandingKitView(
@@ -171,7 +174,7 @@ function ensureAllowedAsset(
         400,
       );
     }
-    if (!ALLOWED_LOGO_TYPES.has(asset.mediaType)) {
+    if (!ALLOWED_LOGO_MEDIA_TYPES.has(asset.mediaType)) {
       throw new BrandingStoreError(
         "Logo must be JPEG, PNG, or WebP",
         "INVALID_LOGO_TYPE",
@@ -354,6 +357,7 @@ export async function upsertBrandingKit(
       secondary_color: kit.secondaryColor,
       accent_color: kit.accentColor,
       voice_tone: kit.voiceTone,
+      voice_tone_tags: normalizeVoiceToneTags(kit.voiceToneTags),
       extra_notes: kit.extraNotes,
       heading_typography: kit.headingTypography,
       body_typography: kit.bodyTypography,

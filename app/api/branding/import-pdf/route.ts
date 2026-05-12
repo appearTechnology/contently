@@ -1,5 +1,5 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { getAuthenticatedUserId } from "@/lib/supabase/server";
 import { extractBrandingFromPdfText } from "@/lib/branding/import-pdf/extract-with-llm";
 import { mergePdfBrandingIntoExistingKit } from "@/lib/branding/import-pdf/merge-into-kit";
 import { parseBrandGuidePdf } from "@/lib/branding/import-pdf/parse-pdf-text";
@@ -23,7 +23,7 @@ function isPdfFile(file: File): boolean {
 }
 
 export async function POST(request: Request) {
-  const { userId } = await auth();
+  const userId = await getAuthenticatedUserId();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

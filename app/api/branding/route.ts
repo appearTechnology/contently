@@ -1,11 +1,12 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { getAuthenticatedUserId } from "@/lib/supabase/server";
 import {
   emptyTypographySlot,
   type BrandingKit,
   type TypographySlot,
   type TypographySlotKind,
 } from "@/lib/branding/types";
+import { normalizeVoiceToneTags } from "@/lib/branding/voice-tone-tags";
 import {
   BrandingStoreError,
   getBrandingKitView,
@@ -50,6 +51,7 @@ function parseKitJson(raw: unknown): BrandingKit | null {
     headingTypography: parseTypography(r.headingTypography),
     bodyTypography: parseTypography(r.bodyTypography),
     voiceTone: clean(r.voiceTone).slice(0, 4000),
+    voiceToneTags: normalizeVoiceToneTags(r.voiceToneTags),
     extraNotes: clean(r.extraNotes).slice(0, 8000),
   };
 }
@@ -76,7 +78,7 @@ async function fileToAsset(
 }
 
 export async function GET() {
-  const { userId } = await auth();
+  const userId = await getAuthenticatedUserId();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -85,7 +87,7 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  const { userId } = await auth();
+  const userId = await getAuthenticatedUserId();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
