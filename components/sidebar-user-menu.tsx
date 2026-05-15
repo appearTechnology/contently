@@ -5,9 +5,7 @@ import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 function initialsFromUser(user: User): string {
@@ -66,8 +64,12 @@ export function SidebarUserMenu() {
 
   if (!loaded) {
     return (
-      <div className="flex justify-start px-2 py-1.5">
+      <div className="flex items-center gap-2 px-2 py-1.5 group-data-[collapsible=icon]:justify-center">
         <Skeleton className="size-9 shrink-0 rounded-full" aria-hidden />
+        <div className="min-w-0 flex-1 space-y-1 group-data-[collapsible=icon]:hidden">
+          <Skeleton className="h-4 w-28" aria-hidden />
+          <Skeleton className="h-3 w-36" aria-hidden />
+        </div>
       </div>
     );
   }
@@ -81,41 +83,30 @@ export function SidebarUserMenu() {
   const initials = initialsFromUser(user);
 
   return (
-    <div className="flex justify-start px-2 py-1.5">
-      <Popover>
-        <PopoverTrigger
-          className={cn(
-            "ring-sidebar-border focus-visible:ring-sidebar-ring flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-sidebar-border bg-sidebar-accent outline-none transition-[box-shadow,transform] hover:opacity-95 focus-visible:ring-2 active:scale-[0.98]",
-          )}
-          aria-label="Open account menu"
-        >
-          <span className="text-sidebar-foreground text-xs font-semibold">
-            {initials}
+    <div className="flex min-w-0 items-center gap-2 px-2 py-1.5 group-data-[collapsible=icon]:justify-center">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-sidebar-border bg-sidebar-accent text-sidebar-foreground text-xs font-semibold">
+        {initials}
+      </span>
+      <span className="grid min-w-0 flex-1 leading-tight group-data-[collapsible=icon]:hidden">
+        <span className="truncate text-sm font-medium text-sidebar-foreground">
+          {name}
+        </span>
+        {email ? (
+          <span className="truncate text-xs text-sidebar-foreground/70">
+            {email}
           </span>
-        </PopoverTrigger>
-        <PopoverContent
-          side="inline-end"
-          align="end"
-          sideOffset={8}
-          className="w-56 p-2"
-        >
-          <div className="border-border mb-2 border-b px-1 pb-2">
-            <p className="truncate text-sm font-medium">{name}</p>
-            {email ? (
-              <p className="text-muted-foreground truncate text-xs">{email}</p>
-            ) : null}
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            className="text-destructive hover:bg-muted hover:text-destructive h-8 w-full justify-start gap-2 px-2 font-medium"
-            onClick={() => void signOut()}
-          >
-            <LogOut className="size-4 shrink-0" aria-hidden />
-            Log out
-          </Button>
-        </PopoverContent>
-      </Popover>
+        ) : null}
+      </span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-destructive size-8 shrink-0 group-data-[collapsible=icon]:hidden"
+        onClick={() => void signOut()}
+        aria-label="Log out"
+      >
+        <LogOut className="size-4" aria-hidden />
+      </Button>
     </div>
   );
 }
