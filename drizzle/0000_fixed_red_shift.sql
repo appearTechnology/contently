@@ -1,0 +1,23 @@
+CREATE TABLE "brand_dna" (
+	"id" text PRIMARY KEY NOT NULL,
+	"userId" text NOT NULL,
+	"url" text NOT NULL,
+	"brandName" text,
+	"industry" text,
+	"tagline" text,
+	"valueProposition" text,
+	"toneOfVoice" text,
+	"brandPersonality" text,
+	"targetAudience" text,
+	"keyMessages" text,
+	"primaryColors" text,
+	"secondaryColors" text,
+	"fonts" text,
+	"logoUrl" text,
+	"screenshotUrl" text,
+	"imageryStyle" text,
+	"layoutStyle" text,
+	"rawJson" text,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL
+);

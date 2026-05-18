@@ -11,8 +11,11 @@ import {
   generateAdCreative,
 } from "@/lib/ai/generate-ad-creative";
 import { mapProviderGenerationError } from "@/lib/ai/map-provider-generation-error";
-import { formatBrandingForPrompt } from "@/lib/branding/format-prompt";
-import { loadBrandingKitForGenerate } from "@/lib/branding/server-store";
+import { parseBrandDNARow } from "@/lib/branding/import-url-new/parse";
+import { formatBrandDnaForPrompt } from "@/lib/branding/import-url-new/format-prompt";
+import { db } from "@/lib/db";
+import { brandDna } from "@/lib/db/schema";
+import { desc, eq } from "drizzle-orm";
 
 export const runtime = "nodejs";
 /** Video generation (e.g. Seedance) can exceed photo latency; raise on Pro if needed. */
@@ -121,43 +124,44 @@ export async function POST(request: Request) {
   let brandContext = "";
   let brandLogoBuffer: Buffer | undefined;
   let brandLogoMediaType: string | undefined;
-  let brandSecondaryLogoBuffer: Buffer | undefined;
-  let brandSecondaryLogoMediaType: string | undefined;
-  let brandIconBuffer: Buffer | undefined;
-  let brandIconMediaType: string | undefined;
 
   if (applyBranding) {
-    const branding = await loadBrandingKitForGenerate(userId);
-    const ctx = formatBrandingForPrompt(branding.view);
-    if (ctx) {
-      brandContext =
-        ctx.length > MAX_BRAND_CONTEXT_CHARS
-          ? ctx.slice(0, MAX_BRAND_CONTEXT_CHARS)
-          : ctx;
-    }
-    if (
-      branding.logoBuffer &&
-      branding.logoMediaType &&
-      ALLOWED_MEDIA.has(branding.logoMediaType)
-    ) {
-      brandLogoBuffer = branding.logoBuffer;
-      brandLogoMediaType = branding.logoMediaType;
-    }
-    if (
-      branding.secondaryLogoBuffer &&
-      branding.secondaryLogoMediaType &&
-      ALLOWED_MEDIA.has(branding.secondaryLogoMediaType)
-    ) {
-      brandSecondaryLogoBuffer = branding.secondaryLogoBuffer;
-      brandSecondaryLogoMediaType = branding.secondaryLogoMediaType;
-    }
-    if (
-      branding.iconBuffer &&
-      branding.iconMediaType &&
-      ALLOWED_MEDIA.has(branding.iconMediaType)
-    ) {
-      brandIconBuffer = branding.iconBuffer;
-      brandIconMediaType = branding.iconMediaType;
+    const [row] = await db
+      .select()
+      .from(brandDna)
+      .where(eq(brandDna.userId, userId))
+      .orderBy(desc(brandDna.updatedAt))
+      .limit(1);
+
+    if (row) {
+      const dna = parseBrandDNARow(row);
+      const ctx = formatBrandDnaForPrompt(dna);
+      if (ctx) {
+        brandContext =
+          ctx.length > MAX_BRAND_CONTEXT_CHARS
+            ? ctx.slice(0, MAX_BRAND_CONTEXT_CHARS)
+            : ctx;
+      }
+
+      if (dna.logoUrl) {
+        try {
+          const logoRes = await fetch(dna.logoUrl);
+          if (logoRes.ok) {
+            const logoType = (logoRes.headers.get("content-type") ?? "")
+              .split(";")[0]
+              .trim();
+            if (ALLOWED_MEDIA.has(logoType)) {
+              const logoAb = await logoRes.arrayBuffer();
+              if (logoAb.byteLength > 0 && logoAb.byteLength <= MAX_IMAGE_BYTES) {
+                brandLogoBuffer = Buffer.from(logoAb);
+                brandLogoMediaType = logoType;
+              }
+            }
+          }
+        } catch {
+          // Logo is best-effort; generation proceeds with text context only.
+        }
+      }
     }
   }
 
@@ -203,15 +207,6 @@ export async function POST(request: Request) {
       ...(brandContext ? { brandContext } : {}),
       ...(brandLogoBuffer && brandLogoMediaType
         ? { brandLogoBuffer, brandLogoMediaType }
-        : {}),
-      ...(brandSecondaryLogoBuffer && brandSecondaryLogoMediaType
-        ? {
-            brandSecondaryLogoBuffer,
-            brandSecondaryLogoMediaType,
-          }
-        : {}),
-      ...(brandIconBuffer && brandIconMediaType
-        ? { brandIconBuffer, brandIconMediaType }
         : {}),
     });
 

@@ -126,3 +126,16 @@ export const EMPTY_BRANDING_KIT_META: BrandingKitMeta = {
   hasSecondaryLogo: false,
   hasIcon: false,
 };
+
+export type ScrapedWebsite = {
+  url: string
+  title: string
+  description: string
+  bodyText: string
+  ogImage: string | null
+  favicon: string | null
+  logoCandidates: string[]
+  fonts: string[]
+  rawColors: string[]
+  screenshot: string
+}

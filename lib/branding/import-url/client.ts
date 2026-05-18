@@ -12,7 +12,7 @@ export async function importBrandingFromUrl(
     return { ok: false, error: "Enter a website URL." };
   }
   try {
-    const res = await fetch("/api/branding/import-url", {
+    const res = await fetch("/api/branding/import-url-new", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url: trimmed }),

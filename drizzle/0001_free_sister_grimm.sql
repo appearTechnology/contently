@@ -1,0 +1,1 @@
+ALTER TABLE "brand_dna" ADD CONSTRAINT "brand_dna_userId_url_unique" UNIQUE("userId","url");

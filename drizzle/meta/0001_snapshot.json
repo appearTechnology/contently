@@ -1,0 +1,169 @@
+{
+  "id": "d3e3a428-0753-40bc-b3ab-cb116ea40299",
+  "prevId": "9ff1005e-deef-4f96-8d7e-47b0c30b6ffd",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.brand_dna": {
+      "name": "brand_dna",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "userId": {
+          "name": "userId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "brandName": {
+          "name": "brandName",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "industry": {
+          "name": "industry",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tagline": {
+          "name": "tagline",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "valueProposition": {
+          "name": "valueProposition",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "toneOfVoice": {
+          "name": "toneOfVoice",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "brandPersonality": {
+          "name": "brandPersonality",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "targetAudience": {
+          "name": "targetAudience",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "keyMessages": {
+          "name": "keyMessages",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "primaryColors": {
+          "name": "primaryColors",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "secondaryColors": {
+          "name": "secondaryColors",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fonts": {
+          "name": "fonts",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "logoUrl": {
+          "name": "logoUrl",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "screenshotUrl": {
+          "name": "screenshotUrl",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "imageryStyle": {
+          "name": "imageryStyle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "layoutStyle": {
+          "name": "layoutStyle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rawJson": {
+          "name": "rawJson",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "brand_dna_userId_url_unique": {
+          "name": "brand_dna_userId_url_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "userId",
+            "url"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
