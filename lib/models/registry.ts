@@ -7,8 +7,15 @@
 
 export type Capability = "image" | "video";
 
-/** How a photo ad is produced for models that support `image` capability. */
-export type ImageStrategy = "multimodal-generate-text" | "generate-image-prompt";
+/**
+ * Which AI SDK call a photo-capable model is invoked through — this tracks how
+ * the provider exposes the model on the gateway, not the model's architecture:
+ * - `text-model`: served as a multimodal chat model; called via `generateText`,
+ *   image returned as a file in the response (e.g. Gemini *-flash-image).
+ * - `image-model`: served on the dedicated image endpoint; called via
+ *   `generateImage` (e.g. Imagen, GPT Image, Seedream).
+ */
+export type ImageStrategy = "text-model" | "image-model";
 
 export interface ModelConfig {
   id: string;
@@ -21,12 +28,36 @@ export interface ModelConfig {
 
 export const MODELS: ModelConfig[] = [
   {
+    id: "gpt-image-2",
+    gatewayModel: "openai/gpt-image-2",
+    label: "GPT Image 2",
+    description: "OpenAI image model. Reference-based generation via prompt images + text.",
+    capabilities: ["image"],
+    imageStrategy: "image-model",
+  },
+  {
     id: "gemini-3.1-flash-image",
     gatewayModel: "google/gemini-3.1-flash-image-preview",
     label: "Gemini 3.1 Flash Image",
     description: "Fast multimodal image ads from your product photo and prompt.",
     capabilities: ["image"],
-    imageStrategy: "multimodal-generate-text",
+    imageStrategy: "text-model",
+  },
+  {
+    id: "bytedance-seedream-5.0-lite",
+    gatewayModel: "bytedance/seedream-5.0-lite",
+    label: "Bytedance Seedream 5 Lite",
+    capabilities: ["image"],
+    description: "Bytedance image model. Reference-based generation",
+    imageStrategy: "image-model"
+  },
+  {
+    id: "xai-grok-imagine-image",
+    gatewayModel: "xai/grok-imagine-image",
+    label: "Grok Imagine",
+    description: "Fast image ads from your product photo and prompt.",
+    capabilities: ["image"],
+    imageStrategy: "image-model",
   },
   {
     id: "imagen-4",
@@ -34,15 +65,7 @@ export const MODELS: ModelConfig[] = [
     label: "Imagen 4",
     description: "Reference-based generation via prompt images + text.",
     capabilities: ["image"],
-    imageStrategy: "generate-image-prompt",
-  },
-  {
-    id: "gpt-image-2",
-    gatewayModel: "openai/gpt-image-2",
-    label: "GPT Image 2",
-    description: "OpenAI image model. Reference-based generation via prompt images + text.",
-    capabilities: ["image"],
-    imageStrategy: "generate-image-prompt",
+    imageStrategy: "image-model",
   },
   {
     id: "seedance-2",

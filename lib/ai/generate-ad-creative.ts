@@ -164,7 +164,7 @@ export async function generateAdCreative(params: {
     throw new Error("Selected model does not support photo output.");
   }
 
-  const strategy = model.imageStrategy ?? "multimodal-generate-text";
+  const strategy = model.imageStrategy ?? "text-model";
 
   const brandImages: { buffer: Buffer; mediaType: string }[] = [];
   if (hasPrimaryBrand && brandLogoBuffer && brandLogoMediaType) {
@@ -202,7 +202,7 @@ export async function generateAdCreative(params: {
     });
   }
 
-  if (strategy === "multimodal-generate-text") {
+  if (strategy === "text-model") {
     const result = await generateText({
       model: model.gatewayModel,
       messages: [
